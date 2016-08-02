@@ -7,8 +7,7 @@ SPACKDEV_FILE = os.path.realpath(os.path.expanduser(__file__))
 os.environ["SPACKDEV_FILE"] = SPACKDEV_FILE
 SPACKDEV_PREFIX = os.path.dirname(os.path.dirname(SPACKDEV_FILE))
 
-#SPACKDEV_LIB_PATH = os.path.join(SPACKDEV_PREFIX, "lib", "spackdev")
-SPACKDEV_LIB_PATH = os.path.join(SPACKDEV_PREFIX, "lib")
+SPACKDEV_LIB_PATH = os.path.join(SPACKDEV_PREFIX, "lib", "spackdev")
 sys.path.insert(0, SPACKDEV_LIB_PATH)
 
 import spackdev
