@@ -24,8 +24,6 @@ def main(argv):
     command = cmd.get_command(args.command)
     try:
         return_val = command(parser, args)
-    # except SpackError, e:
-    #     e.die()
     except KeyboardInterrupt:
         sys.stderr.write('\n')
         die("Keyboard interrupt.")
