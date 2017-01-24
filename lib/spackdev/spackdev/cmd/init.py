@@ -7,15 +7,14 @@ import glob
 import os
 import copy
 import shutil
+import sys
 
 description = "initialize a spackdev area"
 
 
 def append_unique(item, the_list):
-    # print 'append_unique:', item, the_list
     if type(item) == list:
         for subitem in item:
-            # print 'wtf calling with', subitem
             append_unique(subitem, the_list)
     elif (not item in the_list) and (not item == []):
         the_list.append(item)
@@ -39,11 +38,9 @@ class Dependencies:
             retval = self.deps[package]
         else:
             retval = []
-        # print 'jfa: package', package, 'depends on', retval
         return retval
 
     def _append_unique(self, item, the_list):
-        # print 'append_unique:', item, the_list
         if type(item) == list:
             for subitem in item:
                 # print 'wtf calling with', subitem
@@ -53,10 +50,8 @@ class Dependencies:
 
     def get_all_dependencies(self, package, retval = []):
         for subpackage in self.get_dependencies(package):
-            # print 'jfa calling append unique on', subpackage
             self._append_unique(subpackage, retval)
             for subsubpackage in self.get_dependencies(subpackage):
-                # print 'jfa calling subsubpackage append unique on', subsubpackage
                 self._append_unique(self.get_dependencies(subsubpackage), retval)
         return retval
 
@@ -72,15 +67,18 @@ class Dependencies:
 
 
 def extract_stage_dir_from_output(output, package):
+    stage_dir = None
     for line in output.split('\n'):
         s = re.search('.*stage.*in (.*)', line)
         if s:
-            dir = s.group(1)
-    if dir:
-        real_dir = glob.glob(os.path.join(dir, '*'))[0]
-        parent = os.path.dirname(dir)
+            stage_dir = s.group(1)
+    if stage_dir:
+        real_dir = glob.glob(os.path.join(stage_dir, '*'))[0]
+        parent = os.path.dirname(stage_dir)
         os.rename(real_dir, os.path.join(parent, package))
-        shutil.rmtree(dir)
+        shutil.rmtree(stage_dir)
+    else:
+        raise RuntimeError("extract_stage_dir_from_output: failed to find stage_dir")
 
 def stage(packages):
     for package in packages:
@@ -314,16 +312,13 @@ def setup_parser(subparser):
                            help="specs of packages to clean")
 
 def init(parser, args):
-    print "here in init: args =", args
     requesteds = args.packages
     all_dependencies = get_all_dependencies(requesteds)
     additional = get_additional(requesteds, all_dependencies)
-    print 'all packages', all_dependencies.get_all_packages()
-    print 'all_dependencies:', all_dependencies.deps
-    print 'additional', additional
 
     all_packages = requesteds + additional
     write_cmakelists(all_packages, all_dependencies)
+
     pkg_environments = create_environment(all_packages)
 
     stage(all_packages)
