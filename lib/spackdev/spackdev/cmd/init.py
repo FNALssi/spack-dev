@@ -245,7 +245,8 @@ def copy_modified_script(source, dest, environment):
 
 def create_wrappers(package, environment):
     print 'start create_wrappers'
-    wrappers_dir = os.path.join('env', package, 'bin')
+    wrappers_dir = os.path.join('spackdev', package, 'bin')
+    # wrappers_dir = os.path.join('env', package, 'bin')
     if not os.path.exists(wrappers_dir):
         os.makedirs(wrappers_dir)
     for index in range(0, len(environment)):
@@ -263,7 +264,11 @@ def create_wrappers(package, environment):
     print 'end create wrappers'
 
 def create_env_sh(package, environment):
-    pathname = os.path.join('env', package, 'env.sh')
+    env_dir = os.path.join('spackdev', package, 'env')
+    if not os.path.exists(env_dir):
+        os.makedirs(env_dir)
+    pathname = os.path.join(env_dir, 'env.sh')
+    # pathname = os.path.join('env', package, 'env.sh')
     outfile = open(pathname, 'w')
     for line in environment:
         outfile.write(line + '\n')
@@ -286,7 +291,8 @@ def extract_build_step_scripts(package, dry_run_filename):
     # f.close()
     steps = utils.read_all_csv_lists(dry_run_filename)
     print 'jfa: found', len(steps),'build steps'
-    wrappers_dir = os.path.join('env', package, 'bin')
+    wrappers_dir = os.path.join('spackdev', package, 'bin')
+    # wrappers_dir = os.path.join('env', package, 'bin')
 
 def extract_short_spec(package, pkg_environements):
     retval = None
