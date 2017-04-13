@@ -12,7 +12,7 @@ def main(argv):
     parser = argparse.ArgumentParser(prog='spackdev')
     subparsers = parser.add_subparsers(metavar='SUBCOMMAND', dest="command")
 
-    print 'spackdev commands:', cmd.commands
+    # print 'jfa spackdev commands:', cmd.commands
 
     for cm in cmd.commands:
         module = cmd.get_module(cm)

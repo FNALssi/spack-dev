@@ -231,9 +231,9 @@ def copy_modified_script(source, dest, environment):
             if s_spack:
                 outfile.write(pair + '\n')
                 outfile.write('export ' + var + '\n')
-        else:
-            print "jfa: failed (again?) to parse environment line:"
-            print pair
+        # else:
+        #     print "jfa: failed (again?) to parse environment line:"
+        #     print pair
     outfile.write('# end SpackDev variables\n')
 
     # copy the rest
@@ -244,7 +244,7 @@ def copy_modified_script(source, dest, environment):
 
 
 def create_wrappers(package, environment):
-    print 'start create_wrappers'
+    # print 'jfa start create_wrappers'
     wrappers_dir = os.path.join('spackdev', package, 'bin')
     # wrappers_dir = os.path.join('env', package, 'bin')
     if not os.path.exists(wrappers_dir):
@@ -258,10 +258,10 @@ def create_wrappers(package, environment):
                 filename = os.path.basename(value)
                 dest = os.path.join(wrappers_dir, filename)
                 copy_modified_script(value, dest, environment)
-        else:
-            print 'jfa: failed to parse environment line:'
-            print environment[index]
-    print 'end create wrappers'
+        # else:
+        #     print 'jfa: failed to parse environment line:'
+        #     print environment[index]
+    # print 'jfa end create wrappers'
 
 def create_env_sh(package, environment):
     env_dir = os.path.join('spackdev', package, 'env')
@@ -278,9 +278,9 @@ def create_environment(packages):
     for package in packages:
         environment = get_environment(package)
         pkg_environments[package] = environment
-        print package,':'
-        for line in environment:
-            print line
+        # print package,':'
+        # for line in environment:
+        #     print line
         create_wrappers(package, environment)
         create_env_sh(package, environment)
     return pkg_environments
@@ -290,7 +290,7 @@ def extract_build_step_scripts(package, dry_run_filename):
     # lines = f.readlines()
     # f.close()
     steps = utils.read_all_csv_lists(dry_run_filename)
-    print 'jfa: found', len(steps),'build steps'
+    # print 'jfa: found', len(steps),'build steps'
     wrappers_dir = os.path.join('spackdev', package, 'bin')
     # wrappers_dir = os.path.join('env', package, 'bin')
 
