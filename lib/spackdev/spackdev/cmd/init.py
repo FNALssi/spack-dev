@@ -110,11 +110,12 @@ def get_additional(requesteds, dependencies):
     return additional
 
 def init_cmakelists(project='spackdev'):
-    f = open('CMakeLists.txt', 'w')
+    f = open(os.path.join('spackdev', 'CMakeLists.txt'), 'w')
     f.write(
 '''cmake_minimum_required(VERSION 2.8.8)
 project({})
-'''.format(project))
+set(SPACKDEV_SOURCE_DIR "{}")
+'''.format(project, os.getcwd()))
     return f
 
 def add_package_to_cmakelists(cmakelists, package, dependencies):
@@ -129,7 +130,7 @@ add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
   COMMAND cmake
       -G Ninja
       -DCMAKE_INSTALL_PREFIX=${{CMAKE_BINARY_DIR}}/install
-      ${{CMAKE_SOURCE_DIR}}/{package} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
+      ${{SPACKDEV_SOURCE_DIR}}/{package} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
   WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
 '''.format(package=package))
 
@@ -376,7 +377,7 @@ def write_packages_file(requesteds, additional):
 def create_build_area():
     os.mkdir('build')
     os.chdir('build')
-    os.system('cmake .. -GNinja')
+    os.system('cmake ../spackdev -GNinja')
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
