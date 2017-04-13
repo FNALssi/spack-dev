@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 
 command_path = os.path.dirname(__file__)
 ignore_files = r'^\.|^__init__.py$|^#'
@@ -32,8 +33,9 @@ def get_module(name):
 
     fn_name = get_cmd_function_name(name)
     if not hasattr(module, fn_name):
-        tty.die("Command module %s (%s) must define function '%s'."
+        sys.stderr.write("Command module %s (%s) must define function '%s'."
                 % (module.__name__, module.__file__, fn_name))
+        sys.exit(1)
 
     return module
 
