@@ -82,7 +82,7 @@ def extract_stage_dir_from_output(output, package):
 
 def stage(packages):
     for package in packages:
-        status, output = utils.spack_cmd(["stage", "--destpath", ".", package])
+        status, output = utils.spack_cmd(["stage", "--path", ".", package])
         extract_stage_dir_from_output(output, package)
 
 def add_package_dependencies(package, dependencies):
@@ -313,20 +313,40 @@ def create_build_scripts(packages, pkg_environments):
         os.chdir("..")
         extract_build_step_scripts(package, os.path.join(package, "spackdev.out"))
 
+def write_packages_file(requesteds, additional):
+    packages_filename = os.path.join('spackdev', 'packages.sd')
+    with open(packages_filename, 'w') as f:
+        f.write(str(requesteds) + '\n')
+        f.write(str(additional) + '\n')
+
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
-                           help="specs of packages to clean")
+                           help="specs of packages to add to SpackDev area")
+    subparser.add_argument('-s', '--no-stage', action='store_true', dest='no_stage',
+        help="do not stage packages")
+
 
 def init(parser, args):
+    dir = os.getcwd()
+    if (not os.path.exists(dir)):
+        os.makedirs(dir)
+    os.chdir(dir)
+    if (os.path.exists('spackdev')) :
+        sys.stderr.write('spackdev init: cannot re-init (spackdev directory exists)\n')
+        sys.exit(1)
+    os.mkdir('spackdev')
+
     requesteds = args.packages
     all_dependencies = get_all_dependencies(requesteds)
     additional = get_additional(requesteds, all_dependencies)
-
+    write_packages_file(requesteds, additional)
     all_packages = requesteds + additional
+
     write_cmakelists(all_packages, all_dependencies)
 
     pkg_environments = create_environment(all_packages)
 
-    stage(all_packages)
+    if not args.no_stage:
+        stage(all_packages)
 
-    create_build_scripts(all_packages, pkg_environments)
+    #create_build_scripts(all_packages, pkg_environments)
