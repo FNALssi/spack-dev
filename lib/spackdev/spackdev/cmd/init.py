@@ -82,10 +82,9 @@ def extract_stage_dir_from_output(output, package):
         raise RuntimeError("extract_stage_dir_from_output: failed to find stage_dir")
 
 def stage(packages):
-    pass
-    # for package in packages:
-    #     status, output = utils.spack_cmd(["stage", "--path", ".", package])
-    #     extract_stage_dir_from_output(output, package)
+    for package in packages:
+        stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
+        retval = os.system(stage_py_filename)
 
 def add_package_dependencies(package, dependencies):
     status, output = utils.spack_cmd(["graph", "--dot", package])
@@ -374,6 +373,11 @@ def write_packages_file(requesteds, additional):
         f.write(str(requesteds) + '\n')
         f.write(str(additional) + '\n')
 
+def create_build_area():
+    os.mkdir('build')
+    os.chdir('build')
+    os.system('cmake .. -GNinja')
+
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
                            help="specs of packages to add to SpackDev area")
@@ -405,3 +409,4 @@ def init(parser, args):
         stage(all_packages)
 
     #create_build_scripts(all_packages, pkg_environments)
+    create_build_area()
