@@ -22,13 +22,16 @@ def read_packages_file():
 
 
 def setup_parser(subparser):
-    subparser.add_argument('pathname',
+    subparser.add_argument('pathname', nargs=argparse.REMAINDER,
                            help="pathname of SpackDev area")
     # subparser.add_argument('-s', '--no-stage', action='store_true', dest='no_stage',
     #     help="do not stage packages")
 
 def info(parser, args):
-    dir = args.pathname
+    if args.pathname:
+        dir = args.pathname
+    else:
+        dir = '.'
     if (not os.path.exists(dir)):
         sys.stderr.write('spack info: no such pathname "' + dir + '"\n')
         sys.exit(1)
