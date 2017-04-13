@@ -8,6 +8,7 @@ import os
 import copy
 import shutil
 import sys
+import stat
 
 description = "initialize a spackdev area"
 
@@ -81,9 +82,10 @@ def extract_stage_dir_from_output(output, package):
         raise RuntimeError("extract_stage_dir_from_output: failed to find stage_dir")
 
 def stage(packages):
-    for package in packages:
-        status, output = utils.spack_cmd(["stage", "--path", ".", package])
-        extract_stage_dir_from_output(output, package)
+    pass
+    # for package in packages:
+    #     status, output = utils.spack_cmd(["stage", "--path", ".", package])
+    #     extract_stage_dir_from_output(output, package)
 
 def add_package_dependencies(package, dependencies):
     status, output = utils.spack_cmd(["graph", "--dot", package])
@@ -255,6 +257,8 @@ def create_wrappers(package, environment):
             var = s.group(1)
             value = s.group(2)
             if var in ['CC', 'CXX', 'F77', 'FC']:
+                if value[0] == "'" and value[-1] == "'":
+                    value = value[1:-1]
                 filename = os.path.basename(value)
                 dest = os.path.join(wrappers_dir, filename)
                 copy_modified_script(value, dest, environment)
@@ -273,6 +277,56 @@ def create_env_sh(package, environment):
     for line in environment:
         outfile.write(line + '\n')
 
+def create_stage_script(package):
+    bin_dir = os.path.join('spackdev', package, 'bin')
+    if not os.path.exists(bin_dir):
+        os.makedirs(bin_dir)
+    status, output = utils.spack_cmd(["export-stage", package])
+    output_lines = output.split('\n')
+    # print 'jfa: output_lines =',output_lines
+    # print 'jfa: output_lines[1] =', output_lines[1]
+    method = output_lines[0]
+    dict_str = output_lines[1]
+    stage_py_filename = os.path.join(bin_dir, 'stage.py')
+    stage_py = open(stage_py_filename, 'w')
+    stage_py.write('''#!/usr/bin/env python
+import os
+import sys
+def stage(package, method, the_dict):
+    if method == 'GitFetchStrategy':
+        cmd = 'git clone ' + the_dict['url'] + ' ' + package
+        retval = os.system(cmd)
+        if retval != 0:
+            sys.stderr.write('"' + cmd + '" failed\\n')
+            sys.exit(retval)
+        os.chdir(package)
+        if the_dict['tag']:
+            cmd = 'git checkout ' + the_dict['tag']
+            retval = os.system(cmd)
+            if retval != 0:
+                sys.stderr.write('"' + cmd + '" failed\\n')
+                sys.exit(retval)
+    else:
+        sys.stderr.write('SpackDev stage.py does not yet handle sources of type ' + method)
+        sys.exit(1)
+    ''')
+    stage_py.write('''
+if __name__ == '__main__':
+    package = "''')
+    stage_py.write(package)
+    stage_py.write('''"
+    method = "''')
+    stage_py.write(output_lines[0])
+    stage_py.write('''"
+    the_dict = ''')
+    stage_py.write(dict_str)
+    stage_py.write('''
+    stage(package, method, the_dict)
+    ''')
+    stage_py.close()
+    stage_py_st = os.stat(stage_py_filename)
+    os.chmod(stage_py_filename, stage_py_st.st_mode | stat.S_IEXEC)
+
 def create_environment(packages):
     pkg_environments = {}
     for package in packages:
@@ -283,6 +337,7 @@ def create_environment(packages):
         #     print line
         create_wrappers(package, environment)
         create_env_sh(package, environment)
+        create_stage_script(package)
     return pkg_environments
 
 def extract_build_step_scripts(package, dry_run_filename):
