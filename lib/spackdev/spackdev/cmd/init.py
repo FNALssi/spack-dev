@@ -2,13 +2,14 @@
 
 import argparse
 from spackdev import utils
+from spackdev.spack import tty
 import re
 import glob
 import os
 import copy
 import shutil
-import sys
 import stat
+import sys
 
 description = "initialize a spackdev area"
 
@@ -387,13 +388,13 @@ def setup_parser(subparser):
 
 
 def init(parser, args):
+    tty.msg('starting init')
     dir = os.getcwd()
     if (not os.path.exists(dir)):
         os.makedirs(dir)
     os.chdir(dir)
     if (os.path.exists('spackdev')) :
-        sys.stderr.write('spackdev init: cannot re-init (spackdev directory exists)\n')
-        sys.exit(1)
+        tty.die('spackdev init: cannot re-init (spackdev directory exists)\n')
     os.mkdir('spackdev')
 
     requesteds = args.packages
