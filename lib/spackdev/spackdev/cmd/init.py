@@ -3,6 +3,8 @@
 import argparse
 from spackdev import utils
 from spackdev.spack import tty
+from spackdev.spack import yaml
+# from spackdev.spack import Spec
 import re
 import glob
 import os
@@ -89,13 +91,61 @@ def stage(packages):
 
 def add_package_dependencies(package, dependencies):
     status, output = utils.spack_cmd(["graph", "--dot", package])
+    print 'jfa graph --dot:\n', output
     for line in output.split('\n'):
         s = re.search(' *"(.*)" -> "(.*)"', line)
         if s:
-            # print 'depends', s.group(1), s.group(2)
+            print 'jfa depends', s.group(1), s.group(2)
             dependencies.add(s.group(1), s.group(2))
 
+def add_package_dependencies_yaml(package, dependencies):
+    status, output = utils.spack_cmd(["graph", "--dot", package])
+    print 'jfa graph --dot:\n', output
+    for line in output.split('\n'):
+        s = re.search(' *"(.*)" -> "(.*)"', line)
+        if s:
+            print 'jfa depends', s.group(1), s.group(2)
+            dependencies.add(s.group(1), s.group(2))
+
+def extract_specs(packages):
+    pass
+
 def get_all_dependencies(packages):
+    dependencies = Dependencies()
+    cmd = ['spec', '--yaml']
+    cmd.extend(packages)
+    status, output = utils.spack_cmd(cmd)
+    documents = []
+    document = ''
+    for line in output.split('\n'):
+        if line == 'spec:':
+            if len(document) > 0:
+                documents.append(document)
+            document = 'spec:\n'
+        else:
+            document += line + '\n'
+    if len(document) > 0:
+        documents.append(document)
+    specs = map(yaml.load, documents)
+    # print 'jfa documents:', documents
+    # print 'jfa len documents:', len(documents)
+    # spec = yaml.load(documents[0])
+    # print 'jfa specs:'
+    # for spec in specs:
+    print 'jfa spec0 dependencies:', specs[0]['spec'][0]['corge']['dependencies'].keys()
+    print 'jfa spec0 info:'
+    for spec in specs[0]['spec']:
+        print 'jfaspec', spec
+        print 'jfaspec.keys', spec.keys()
+        if spec[spec.keys()[0]].has_key('dependencies'):
+            print 'jfaspec dependencies', spec[spec.keys()[0]]['dependencies'].keys()
+    # print 'jfa spec1:', specs[1]['spec'][0]['garply']['dependencies'].keys()
+    sys.exit(99)
+    for package in packages:
+        add_package_dependencies(package, dependencies)
+    return dependencies
+
+def get_all_dependencies_yaml(packages):
     dependencies = Dependencies()
     for package in packages:
         add_package_dependencies(package, dependencies)
@@ -394,7 +444,7 @@ def init(parser, args):
         os.makedirs(dir)
     os.chdir(dir)
     if (os.path.exists('spackdev')) :
-        tty.die('spackdev init: cannot re-init (spackdev directory exists)\n')
+        tty.die('spackdev init: cannot re-init (spackdev directory exists)')
     os.mkdir('spackdev')
 
     requesteds = args.packages

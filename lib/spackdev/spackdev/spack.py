@@ -12,3 +12,5 @@ if status != 0:
 sys.path.append(os.path.join(spack_root, 'lib', 'spack'))
 import external.yaml as yaml
 import llnl.util.tty as tty
+# import spack.spack
+# print 'jfa dir(spack.spack): ', dir(spack.spack)
