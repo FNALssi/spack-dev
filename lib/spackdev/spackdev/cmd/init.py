@@ -30,12 +30,18 @@ class Dependencies:
         self.all_packages = []
 
     def add(self, package, dependency):
-        if not self.deps.has_key(package):
-            self.deps[package] = []
-            self._append_unique(dependency, self.all_packages)
-        if dependency and (not dependency in self.deps[package]):
-            self.deps[package].append(dependency)
-            self._append_unique(dependency, self.all_packages)
+        print 'jfa add', package, dependency
+        if type(dependency) == list:
+            for item in dependency:
+                self.add(package, item)
+        else:
+            if not self.deps.has_key(package):
+                self.deps[package] = [dependency]
+                self._append_unique(package, self.all_packages)
+                self._append_unique(dependency, self.all_packages)
+            if dependency and (not dependency in self.deps[package]):
+                self.deps[package].append(dependency)
+                self._append_unique(dependency, self.all_packages)
 
     def get_dependencies(self, package):
         if self.deps.has_key(package):
@@ -45,6 +51,7 @@ class Dependencies:
         return retval
 
     def _append_unique(self, item, the_list):
+        print 'jfa _append_unique', item, the_list
         if type(item) == list:
             for subitem in item:
                 # print 'wtf calling with', subitem
@@ -107,17 +114,10 @@ def add_package_dependencies_yaml(package, dependencies):
             print 'jfa depends', s.group(1), s.group(2)
             dependencies.add(s.group(1), s.group(2))
 
-def extract_specs(packages):
-    pass
-
-def get_all_dependencies(packages):
-    dependencies = Dependencies()
-    cmd = ['spec', '--yaml']
-    cmd.extend(packages)
-    status, output = utils.spack_cmd(cmd)
+def yaml_to_specs(yaml_text):
     documents = []
     document = ''
-    for line in output.split('\n'):
+    for line in yaml_text.split('\n'):
         if line == 'spec:':
             if len(document) > 0:
                 documents.append(document)
@@ -126,26 +126,40 @@ def get_all_dependencies(packages):
             document += line + '\n'
     if len(document) > 0:
         documents.append(document)
-    specs = map(yaml.load, documents)
-    # print 'jfa documents:', documents
-    # print 'jfa len documents:', len(documents)
-    # spec = yaml.load(documents[0])
-    # print 'jfa specs:'
-    # for spec in specs:
-    print 'jfa spec0 dependencies:', specs[0]['spec'][0]['corge']['dependencies'].keys()
-    print 'jfa spec0 info:'
-    for spec in specs[0]['spec']:
-        print 'jfaspec', spec
-        print 'jfaspec.keys', spec.keys()
-        if spec[spec.keys()[0]].has_key('dependencies'):
-            print 'jfaspec dependencies', spec[spec.keys()[0]]['dependencies'].keys()
-    # print 'jfa spec1:', specs[1]['spec'][0]['garply']['dependencies'].keys()
-    sys.exit(99)
-    for package in packages:
-        add_package_dependencies(package, dependencies)
+    super_specs = map(yaml.load, documents)
+    specs = {}
+    for sub_spec in super_specs[0]['spec']:
+        key = sub_spec.keys()[0]
+        value = sub_spec[key]
+        specs[key] = value
+    print 'jfa specs =', specs
+    return specs
+
+def extract_specs(packages):
+    cmd = ['spec', '--yaml']
+    cmd.extend(packages)
+    status, output = utils.spack_cmd(cmd)
+    specs = yaml_to_specs(output)
+    return specs
+
+def get_all_dependencies(packages):
+    dependencies = Dependencies()
+    specs = extract_specs(packages)
+    for name in specs.keys():
+        print 'jfa: name', name
+        if specs[name].has_key('dependencies'):
+            package_dependencies = specs[name]['dependencies'].keys()
+        else:
+            package_dependencies = []
+        dependencies.add(name, package_dependencies)
+    print 'jfa dependencies.get_all_packages():', dependencies.get_all_packages()
+    print 'jfa dependencies:'
+    for package in dependencies.get_all_packages():
+        package_dependencies = dependencies.get_dependencies(package)
+        print package, ':', package_dependencies
     return dependencies
 
-def get_all_dependencies_yaml(packages):
+def get_all_dependencies_not_yaml(packages):
     dependencies = Dependencies()
     for package in packages:
         add_package_dependencies(package, dependencies)
