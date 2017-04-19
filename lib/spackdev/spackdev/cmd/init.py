@@ -51,7 +51,6 @@ class Dependencies:
         return retval
 
     def _append_unique(self, item, the_list):
-        print 'jfa _append_unique', item, the_list
         if type(item) == list:
             for subitem in item:
                 # print 'wtf calling with', subitem
@@ -95,24 +94,6 @@ def stage(packages):
     for package in packages:
         stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
         retval = os.system(stage_py_filename)
-
-def add_package_dependencies(package, dependencies):
-    status, output = utils.spack_cmd(["graph", "--dot", package])
-    print 'jfa graph --dot:\n', output
-    for line in output.split('\n'):
-        s = re.search(' *"(.*)" -> "(.*)"', line)
-        if s:
-            print 'jfa depends', s.group(1), s.group(2)
-            dependencies.add(s.group(1), s.group(2))
-
-def add_package_dependencies_yaml(package, dependencies):
-    status, output = utils.spack_cmd(["graph", "--dot", package])
-    print 'jfa graph --dot:\n', output
-    for line in output.split('\n'):
-        s = re.search(' *"(.*)" -> "(.*)"', line)
-        if s:
-            print 'jfa depends', s.group(1), s.group(2)
-            dependencies.add(s.group(1), s.group(2))
 
 def yaml_to_specs(yaml_text):
     documents = []
