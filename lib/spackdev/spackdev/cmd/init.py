@@ -30,7 +30,6 @@ class Dependencies:
         self.all_packages = []
 
     def add(self, package, dependency):
-        print 'jfa add', package, dependency
         if type(dependency) == list:
             for item in dependency:
                 self.add(package, item)
@@ -113,7 +112,6 @@ def yaml_to_specs(yaml_text):
         key = sub_spec.keys()[0]
         value = sub_spec[key]
         specs[key] = value
-    print 'jfa specs =', specs
     return specs
 
 def extract_specs(packages):
@@ -127,23 +125,13 @@ def get_all_dependencies(packages):
     dependencies = Dependencies()
     specs = extract_specs(packages)
     for name in specs.keys():
-        print 'jfa: name', name
         if specs[name].has_key('dependencies'):
             package_dependencies = specs[name]['dependencies'].keys()
         else:
             package_dependencies = []
         dependencies.add(name, package_dependencies)
-    print 'jfa dependencies.get_all_packages():', dependencies.get_all_packages()
-    print 'jfa dependencies:'
     for package in dependencies.get_all_packages():
         package_dependencies = dependencies.get_dependencies(package)
-        print package, ':', package_dependencies
-    return dependencies
-
-def get_all_dependencies_not_yaml(packages):
-    dependencies = Dependencies()
-    for package in packages:
-        add_package_dependencies(package, dependencies)
     return dependencies
 
 def get_additional(requesteds, dependencies):
