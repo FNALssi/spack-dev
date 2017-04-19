@@ -15,7 +15,6 @@ import sys
 
 description = "initialize a spackdev area"
 
-
 def append_unique(item, the_list):
     if type(item) == list:
         for subitem in item:
@@ -93,7 +92,7 @@ def stage(packages):
     for package in packages:
         tty.msg('staging '  + package)
         stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-        retval = os.system(stage_py_filename)
+        retval, output = utils.external_cmd(stage_py_filename)
 
 def yaml_to_specs(yaml_text):
     documents = []
@@ -412,7 +411,7 @@ def write_packages_file(requesteds, additional):
 def create_build_area():
     os.mkdir('build')
     os.chdir('build')
-    os.system('cmake ../spackdev -GNinja')
+    utils.external_cmd(['cmake', '../spackdev', '-GNinja'])
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
