@@ -91,6 +91,7 @@ def extract_stage_dir_from_output(output, package):
 
 def stage(packages):
     for package in packages:
+        tty.msg('staging '  + package)
         stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
         retval = os.system(stage_py_filename)
 
@@ -449,4 +450,3 @@ def init(parser, args):
     #create_build_scripts(all_packages, pkg_environments)
     tty.msg('creating build area')
     create_build_area()
-    
