@@ -421,7 +421,6 @@ def setup_parser(subparser):
 
 
 def init(parser, args):
-    tty.msg('starting init')
     dir = os.getcwd()
     if (not os.path.exists(dir)):
         os.makedirs(dir)
@@ -431,17 +430,23 @@ def init(parser, args):
     os.mkdir('spackdev')
 
     requesteds = args.packages
+    tty.msg('requested packages: ' + str(' '.join(requesteds)))
     all_dependencies = get_all_dependencies(requesteds)
     additional = get_additional(requesteds, all_dependencies)
+    if additional:
+        tty.msg('additional inter-dependent packages: ' + str(' '.join(additional)))
     write_packages_file(requesteds, additional)
     all_packages = requesteds + additional
 
     write_cmakelists(all_packages, all_dependencies)
 
+    tty.msg('creating wrapper scripts')
     pkg_environments = create_environment(all_packages)
 
     if not args.no_stage:
         stage(all_packages)
 
     #create_build_scripts(all_packages, pkg_environments)
+    tty.msg('creating build area')
     create_build_area()
+    
