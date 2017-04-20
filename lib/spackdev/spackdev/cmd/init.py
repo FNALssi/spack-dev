@@ -92,7 +92,7 @@ def stage(packages):
     for package in packages:
         tty.msg('staging '  + package)
         stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-        retval, output = utils.external_cmd(stage_py_filename)
+        retval, output = utils.external_cmd([stage_py_filename])
 
 def yaml_to_specs(yaml_text):
     documents = []
