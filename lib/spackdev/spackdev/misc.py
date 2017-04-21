@@ -13,6 +13,10 @@ def spack_cmd(args):
     status, output = getstatusoutput(cmd)
     t1 = time.time()
     tty.verbose('spack_cmd: {} {}s'.format(args[0], t1 - t0))
+    if status != 0:
+        tty.error('spack command output:\n' + output)
+        tty.die('spack command "{}" failed with return value {}'\
+                .format(cmd, status))
     # print 'spack_cmd:', args[0], t1 - t0, 's'
     return status, output
 
