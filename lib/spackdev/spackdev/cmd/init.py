@@ -2,7 +2,7 @@
 
 import argparse
 from spackdev import spack_cmd, external_cmd
-from spackdev import stage, install_dependencies
+from spackdev import stage_packages, install_dependencies
 from spackdev.spack_import import tty
 from spackdev.spack_import import yaml
 # from spackdev.spack import Spec
@@ -444,7 +444,7 @@ def init(parser, args):
         install_dependencies(all_packages)
 
     if not args.no_stage:
-        stage(all_packages)
+        stage_packages(all_packages)
 
     #create_build_scripts(all_packages, pkg_environments)
     tty.msg('creating build area')

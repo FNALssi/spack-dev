@@ -13,11 +13,16 @@ def install_dependencies(packages):
                                 '--exclude', excludes, install_packages])
     return retval, output
 
-def stage(packages):
-    for package in packages:
-        tty.msg('staging '  + package)
-        stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-        retval, output = external_cmd([stage_py_filename])
-        if retval != 0:
-            tty.die('staging {} failed'.format(package))
+def stage_package(package):
+    tty.debug('jfa getcwd() = {}'.format(os.getcwd()))
+    if os.path.exists(os.path.join('.', package)):
+        tty.die('stage: directory "{}" exists.'.format(package))
+    tty.msg('staging '  + package)
+    stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
+    retval, output = external_cmd([stage_py_filename])
+    if retval != 0:
+        tty.die('staging {} failed'.format(package))
 
+def stage_packages(packages):
+    for package in packages:
+        stage_package(package)
