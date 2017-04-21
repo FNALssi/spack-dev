@@ -2,7 +2,7 @@
 
 import argparse
 from spackdev import spack_cmd, external_cmd
-from spackdev import stage
+from spackdev import stage, install_dependencies
 from spackdev.spack_import import tty
 from spackdev.spack_import import yaml
 # from spackdev.spack import Spec
@@ -411,6 +411,8 @@ def create_build_area():
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
                            help="specs of packages to add to SpackDev area")
+    subparser.add_argument('-d', '--no-dependencies', action='store_true', dest='no_dependencies',
+        help="do not have spack install dependent packages")
     subparser.add_argument('-s', '--no-stage', action='store_true', dest='no_stage',
         help="do not stage packages")
 
@@ -437,6 +439,9 @@ def init(parser, args):
 
     tty.msg('creating wrapper scripts')
     pkg_environments = create_environment(all_packages)
+
+    if not args.no_dependencies:
+        install_dependencies(all_packages)
 
     if not args.no_stage:
         stage(all_packages)
