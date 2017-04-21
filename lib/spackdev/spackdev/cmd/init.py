@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 import argparse
-from spackdev import utils
-from spackdev.spack import tty
-from spackdev.spack import yaml
+from spackdev import spack_cmd, external_cmd
+from spackdev import stage
+from spackdev.spack_import import tty
+from spackdev.spack_import import yaml
 # from spackdev.spack import Spec
 import re
 import glob
@@ -88,12 +89,6 @@ def extract_stage_dir_from_output(output, package):
     else:
         raise RuntimeError("extract_stage_dir_from_output: failed to find stage_dir")
 
-def stage(packages):
-    for package in packages:
-        tty.msg('staging '  + package)
-        stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-        retval, output = utils.external_cmd([stage_py_filename])
-
 def yaml_to_specs(yaml_text):
     documents = []
     document = ''
@@ -117,7 +112,7 @@ def yaml_to_specs(yaml_text):
 def extract_specs(packages):
     cmd = ['spec', '--yaml']
     cmd.extend(packages)
-    status, output = utils.spack_cmd(cmd)
+    status, output = spack_cmd(cmd)
     specs = yaml_to_specs(output)
     return specs
 
@@ -232,7 +227,7 @@ def write_cmakelists(packages, dependencies):
 
 def get_environment(package):
     environment = []
-    status, output = utils.spack_cmd(["env", package])
+    status, output = spack_cmd(["env", package])
     variables = ['CC', 'CXX', 'F77', 'FC', 'CMAKE_PREFIX_PATH', 'PATH']
     for line in output.split('\n'):
         for variable in variables:
@@ -315,7 +310,7 @@ def create_stage_script(package):
     bin_dir = os.path.join('spackdev', package, 'bin')
     if not os.path.exists(bin_dir):
         os.makedirs(bin_dir)
-    status, output = utils.spack_cmd(["export-stage", package])
+    status, output = spack_cmd(["export-stage", package])
     output_lines = output.split('\n')
     # print 'jfa: output_lines =',output_lines
     # print 'jfa: output_lines[1] =', output_lines[1]
@@ -397,7 +392,7 @@ def create_build_scripts(packages, pkg_environments):
     for package in packages:
         os.chdir(package)
         short_spec = extract_short_spec(package, pkg_environments)
-        status, output = utils.spack_cmd(["diy", "--dry-run-file", "spackdev.out",
+        status, output = spack_cmd(["diy", "--dry-run-file", "spackdev.out",
                                           short_spec])
         os.chdir("..")
         extract_build_step_scripts(package, os.path.join(package, "spackdev.out"))
@@ -411,7 +406,7 @@ def write_packages_file(requesteds, additional):
 def create_build_area():
     os.mkdir('build')
     os.chdir('build')
-    utils.external_cmd(['cmake', '../spackdev', '-GNinja'])
+    external_cmd(['cmake', '../spackdev', '-GNinja'])
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
 from main import *
-import spack
+from cmd_common import *
+from misc import *
+import spack_import
 

@@ -2,8 +2,8 @@
 
 from commands import getstatusoutput
 import sys
-
 import time
+from spack_import import tty
 
 def spack_cmd(args):
     argstr = ' '.join(args)
@@ -12,7 +12,8 @@ def spack_cmd(args):
     t0 = time.time()
     status, output = getstatusoutput(cmd)
     t1 = time.time()
-    print 'spack_cmd:', args[0], t1 - t0, 's'
+    tty.verbose('spack_cmd: {} {}s'.format(args[0], t1 - t0))
+    # print 'spack_cmd:', args[0], t1 - t0, 's'
     return status, output
 
 def external_cmd(args):
