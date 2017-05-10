@@ -2,9 +2,13 @@
 
 ## Single-package development
 A developer working with a single package needs to
+
 1. Download the source code, usually from a version control system.
+
 1. Determine the dependencies of the package.
-2. Install missing packages.
+
+1. Install missing packages.
+
 1. Configure the package build system so that it can locate the dependent packages.
 
 All of this can be accomplished manually, if tediously. Doing things manually allows the developer to, among other things:
