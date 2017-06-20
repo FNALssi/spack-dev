@@ -310,7 +310,7 @@ def create_stage_script(package):
     bin_dir = os.path.join('spackdev', package, 'bin')
     if not os.path.exists(bin_dir):
         os.makedirs(bin_dir)
-    status, output = spack_cmd(["export-stage", package])
+    status, output = spack_cmd(["exportstage", package])
     output_lines = output.split('\n')
     # print 'jfa: output_lines =',output_lines
     # print 'jfa: output_lines[1] =', output_lines[1]
