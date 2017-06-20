@@ -9,8 +9,13 @@ if status != 0:
     sys.stderr.write('SpackDev: failed to get location of spack installation')
     sys.exit(1)
 
+if sys.version_info[0] == 2:
+    lib_dir = 'lib'
+else:
+    lib_dir = 'lib3'
+sys.path.append(os.path.join(spack_root, 'lib', 'spack', 'external', 'yaml', lib_dir))
 sys.path.append(os.path.join(spack_root, 'lib', 'spack'))
-import external.yaml as yaml
+import yaml
 import llnl.util.tty as tty
 
 tty.set_verbose(True)
