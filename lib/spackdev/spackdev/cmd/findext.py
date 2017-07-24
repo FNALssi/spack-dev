@@ -15,3 +15,5 @@ def setup_parser(subparser):
 
 def findext(parser, args):
     print('jfa: findext start')
+    external_repo = External_repo()
+    print('jfa: external_repo.all_external_names() =', external_repo.all_external_names())

@@ -12,8 +12,8 @@ def parent_dir(path, n):
 
 class External_repo:
     def __init__(self):
-        self.spackdev_root = parent_dir(self.__file__, 4)
-        self.externals_path = os.path.join(spackdev_root, 'var', 'spackdev', 'repo')
+        spackdev_root = parent_dir(__file__, 4)
+        self.externals_path = os.path.join(spackdev_root, 'var', 'spackdev', 'repo', 'packages')
         self.external_file_name = 'external.py'
         self._find_externals()
 
@@ -23,9 +23,10 @@ class External_repo:
             ext_dir = os.path.join(self.externals_path, ext_name)
             if os.path.isdir(ext_dir):
                 ext_file = os.path.join(ext_dir, self.external_file_name)
-                self._all_external_names.append(ext_file)
+                if os.path.isfile(ext_file):
+                    self._all_external_names.append(ext_name)
         self._all_external_names.sort()
 
     def all_external_names(self):
-        '''Returns a sorted list of all external externals in external repo'''
+        '''Returns a sorted list of all externals in external repo'''
         return self._all_external_names
