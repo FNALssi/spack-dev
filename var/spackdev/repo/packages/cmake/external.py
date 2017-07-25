@@ -10,4 +10,5 @@ class Cmake:
     def find(self):
         pathname = external_tools.which_in_path('cmake')
         print('jfa: found cmake in ', pathname)
-        #       exe = external_tools.which_in_path('tar')
+        # version = external_tools.extract_version(pathname)
+        # print('jfa: found cmake version ', version)

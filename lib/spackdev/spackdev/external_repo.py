@@ -4,7 +4,6 @@ import os
 import os.path
 import sys
 import imp
-from types import ModuleType
 
 
 def parent_dir(path, n):
@@ -18,36 +17,12 @@ def mod_to_class(name):
     return name.capitalize()
 
 
-class SpackdevNamespace(ModuleType):
-    """ Allow lazy loading of modules."""
-
-    def __init__(self, namespace):
-        super(SpackdevNamespace, self).__init__(namespace)
-        self.__file__ = "(spackdev namespace)"
-        self.__path__ = []
-        self.__name__ = namespace
-        self.__package__ = namespace
-        self.__modules = {}
-
-    def __getattr__(self, name):
-        """Getattr lazily loads modules if they're not already loaded."""
-        submodule = self.__package__ + '.' + name
-        setattr(self, name, __import__(submodule))
-        return getattr(self, name)
-
-
 class External_repo:
     def __init__(self):
         spackdev_root = parent_dir(__file__, 4)
         self.externals_path = os.path.join(spackdev_root, 'var', 'spackdev',
                                            'repo', 'packages')
         self.external_file_name = 'external.py'
-        # module = imp.new_module('spackdev.external')
-        # module = SpackdevNamespace('spackdev.external')
-        # module.__loader__ = self
-        # sys.modules['spack.external'] = module
-        # print('jfa: set spack.external in sys.modules')
-        # print('jfa: 1 sys.modules.keys() =', sys.modules.keys())
         self._find_externals()
 
     def _find_externals(self):

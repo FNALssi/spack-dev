@@ -20,9 +20,4 @@ def findext(parser, args):
     print('jfa: external_repo.all_external_names() =', external_repo.all_external_names())
     for pkg in external_repo.all_external_names():
         print('{}:'.format(pkg))
-        external_repo.get_pkg_class(pkg)().doit()
         external_repo.get_pkg_class(pkg)().find()
-#     for pkg in ['tar']:
-#         print('{}:'.format(pkg))
-# #        external_repo.get_pkg_class(pkg)().doit()
-#         external_repo.get_pkg_class(pkg)().find()
