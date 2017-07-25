@@ -3,6 +3,10 @@
 import commands
 import os
 import re
+import distutils.spawn
+
+def which_in_path(executable):
+    return distutils.spawn.find_executable(executable)
 
 def status_write(message):
     print(message)
