@@ -8,6 +8,12 @@ import distutils.spawn
 def which_in_path(executable):
     return distutils.spawn.find_executable(executable)
 
+def extract_version(pathname, arg='--version', regexp='[0-9\.]+'):
+    command = "{0} {1}".format(pathname, arg)
+    (status, output) = commands.getstatusoutput(command)
+    match = re.search(regexp, output)
+    return match[0]
+
 def status_write(message):
     print(message)
 
