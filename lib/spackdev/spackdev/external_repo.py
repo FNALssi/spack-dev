@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import os
 import os.path
 import sys
@@ -39,9 +41,14 @@ class External_repo:
     def _find_external_packages(self):
         self._all_external_packages = {}
         for name in self._all_external_names:
+            print('findext ' + name + ': ', end='')
             external_package = self.get_pkg_class(name)().find()
             if external_package.pathname:
                 self._all_external_packages[name] = external_package
+                print(
+                    external_package.version + ' in ' + external_package.pathname)
+            else:
+                print('not found')
 
     def all_external_names(self):
         '''Returns a sorted list of all externals in external repo'''

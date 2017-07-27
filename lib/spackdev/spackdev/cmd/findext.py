@@ -17,10 +17,10 @@ def setup_parser(subparser):
 def findext(parser, args):
     print('jfa: findext start')
     external_repo = External_repo()
-    print('jfa: external_repo.all_external_names() =', external_repo.all_external_names())
-    for pkg in external_repo.all_external_names():
-        print('{}:'.format(pkg))
-        external_repo.get_pkg_class(pkg)().find()
+    # print('jfa: external_repo.all_external_names() =', external_repo.all_external_names())
+    # for pkg in external_repo.all_external_names():
+    #     print('{}:'.format(pkg))
+    #     external_repo.get_pkg_class(pkg)().find()
 
     print('jfa: reading packages.yaml:')
     packages_yaml = Packages_yaml()
