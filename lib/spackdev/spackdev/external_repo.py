@@ -39,7 +39,9 @@ class External_repo:
     def _find_external_packages(self):
         self._all_external_packages = {}
         for name in self._all_external_names:
-            self._all_external_packages[name] = self.get_pkg_class(name)().find()
+            external_package = self.get_pkg_class(name)().find()
+            if external_package.pathname:
+                self._all_external_packages[name] = external_package
 
     def all_external_names(self):
         '''Returns a sorted list of all externals in external repo'''

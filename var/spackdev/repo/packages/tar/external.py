@@ -1,14 +1,9 @@
 #!/usr/bin/env python
 
-from spackdev import external_tools, External_package
+from spackdev.external_tools import find_executable_version
 
 
 class Tar:
-    def doit(self):
-        print('Tar.doit: doing it\n')
-
     def find(self):
-        pathname = external_tools.which_in_path('tar')
-        print('jfa: found tar in ', pathname)
-        return External_package('tar', '1.0', pathname)
+        return find_executable_version('tar')
 

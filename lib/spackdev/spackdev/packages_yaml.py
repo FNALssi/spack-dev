@@ -83,7 +83,8 @@ class Packages_yaml:
         for package in packages:
             external_package = external_packages[package]
             outfile.write(self.indent + package + ':\n')
-            outfile.write(self.indent + self.indent + package)
+            outfile.write(self.indent + self.indent + 'paths:\n')
+            outfile.write(self.indent + self.indent + self.indent + package)
             if external_package.version:
                 outfile.write('@' + external_package.version)
             outfile.write(': ' + external_package.pathname + '\n')

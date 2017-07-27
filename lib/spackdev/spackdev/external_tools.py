@@ -4,18 +4,33 @@ import commands
 import os
 import re
 import distutils.spawn
+from external_package import External_package
 
-def which_in_path(executable):
+def find_executable_version(executable, version_arg='--version',
+                            version_regexp='[0-9\.]+'):
+    pathname = which_executable_in_path(executable)
+    if pathname:
+        version = extract_executable_version(pathname, version_arg,
+                                             version_regexp)
+    else:
+        version = None
+    return External_package(executable, version, pathname)
+
+
+def which_executable_in_path(executable):
     return distutils.spawn.find_executable(executable)
 
-def extract_version(pathname, arg='--version', regexp='[0-9\.]+'):
+
+def extract_executable_version(pathname, arg='--version', regexp='[0-9\.]+'):
     command = "{0} {1}".format(pathname, arg)
     (status, output) = commands.getstatusoutput(command)
     match = re.search(regexp, output)
     return match.group(0)
 
+
 def status_write(message):
     print(message)
+
 
 def version_acceptable(the_str, min_version_list):
     status_write(
