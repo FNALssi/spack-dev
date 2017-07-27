@@ -3,7 +3,7 @@
 from __future__ import print_function
 
 import argparse
-from spackdev import External_repo
+from spackdev import External_repo, Packages_yaml
 description = "describe a spackdev area"
 
 
@@ -21,3 +21,13 @@ def findext(parser, args):
     for pkg in external_repo.all_external_names():
         print('{}:'.format(pkg))
         external_repo.get_pkg_class(pkg)().find()
+
+    print('jfa: reading packages.yaml:')
+    packages_yaml = Packages_yaml()
+    print('jfa: pre_lines:')
+    for line in packages_yaml.pre_lines:
+        print(line.rstrip())
+    print('jfa: post_lines:')
+    for line in packages_yaml.post_lines:
+        print(line.rstrip())
+    packages_yaml.write_file(external_repo.all_external_packages())

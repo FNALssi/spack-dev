@@ -24,6 +24,7 @@ class External_repo:
                                            'repo', 'packages')
         self.external_file_name = 'external.py'
         self._find_externals()
+        self._find_external_packages()
 
     def _find_externals(self):
         self._all_external_names = []
@@ -35,9 +36,18 @@ class External_repo:
                     self._all_external_names.append(ext_name)
         self._all_external_names.sort()
 
+    def _find_external_packages(self):
+        self._all_external_packages = {}
+        for name in self._all_external_names:
+            self._all_external_packages[name] = self.get_pkg_class(name)().find()
+
     def all_external_names(self):
         '''Returns a sorted list of all externals in external repo'''
         return self._all_external_names
+
+    def all_external_packages(self):
+        '''Returns a dict containing External_package objects'''
+        return self._all_external_packages
 
     def get_pkg_class(self, pkg_name):
         '''Get the class for a package out of its module'''
