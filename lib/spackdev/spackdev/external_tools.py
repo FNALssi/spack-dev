@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import distutils.spawn
+import tempfile
 from external_package import External_package
 
 
@@ -39,7 +40,7 @@ def status_write(message):
     print(message)
 
 
-def compile_test_program(lines, compiler):
+def compile_test_program(lines, compiler, include_flags, link_flags):
     f = open('tmp.cc', 'w')
     status_write(
         "debug_config: test compiling C++ program:\n"
@@ -47,18 +48,19 @@ def compile_test_program(lines, compiler):
         + "\n")
     for line in lines:
         f.write(line)
-        status_write(line)
+        status_write(line.rstrip())
     f.close()
     status_write(
         "-----------------end-----------------"
         + "\n")
-    command = compiler + ' %s tmp.cc -o a.out %s' % (include_flags, link_flags)
+    command = compiler + ' {} tmp.cc -o a.out {}'.format(include_flags,
+                                                         link_flags)
     status_write(
         "debug_config: " + command
         + "\n")
     (error_status, output) = commands.getstatusoutput(command)
     status_write(
-        "debug_config: compilation completed with status " + str(status)
+        "debug_config: compilation completed with status " + str(error_status)
         + " and output:\n"
         + output
         + "\n")
@@ -77,10 +79,10 @@ def find_library_version(library, headers, define=None,
                          compiler='c++',
                          prefixes=['/usr', '/usr/local']):
     lines = []
-    lines.append('#include <stdio>\n\n')
+    lines.append('#include <iostream>\n\n')
     lines.append('int main()\n{\n')
     if define:
-        lines.append('    std::cout << "{}" << std::endl;\n'.format(define))
+        lines.append('    std::cout << {} << std::endl;\n'.format(define))
     else:
         lines.append('    std::cout << "success!\n" << std::endl;')
     lines.append('    return 0;\n')
@@ -95,9 +97,10 @@ def find_library_version(library, headers, define=None,
     for prefix in prefixes:
         include_lines = []
         for header in headers_list:
-            full_path = os.path.join(prefix, header)
+            full_path = os.path.join(prefix, 'include', header)
             include_lines.append('#include "{}"\n'.format(full_path))
-        if compile_test_program(include_lines + lines):
+        if compile_test_program(include_lines + lines, compiler, include_flags,
+                                link_flags):
             good_prefix = prefix
             break
     if good_prefix and define:
