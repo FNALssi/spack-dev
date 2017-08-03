@@ -15,7 +15,7 @@ def status_write(output):
 
 
 def find_executable_version(executable, version_arg='--version',
-                            version_regexp='[0-9\.]+'):
+                            version_regexp='[0-9]+\.[0-9\.]+[0-9a-z-]*'):
     pathname = which_executable_in_path(executable)
     if pathname:
         version = extract_executable_version(pathname, version_arg,
@@ -29,7 +29,7 @@ def which_executable_in_path(executable):
     return distutils.spawn.find_executable(executable)
 
 
-def extract_executable_version(pathname, arg='--version', regexp='[0-9\.]+'):
+def extract_executable_version(pathname, arg='--version', regexp='[0-9]+\.[0-9\.]+[0-9a-z-]*'):
     command = "{0} {1}".format(pathname, arg)
     (status, output) = commands.getstatusoutput(command)
     match = re.search(regexp, output)
