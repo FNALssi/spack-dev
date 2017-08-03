@@ -3,8 +3,15 @@
 import commands
 import os
 import re
+import sys
 import distutils.spawn
 from external_package import External_package
+
+
+def status_write(output):
+    if True:
+        sys.stderr.write(output)
+
 
 def find_executable_version(executable, version_arg='--version',
                             version_regexp='[0-9\.]+'):
@@ -30,6 +37,84 @@ def extract_executable_version(pathname, arg='--version', regexp='[0-9\.]+'):
 
 def status_write(message):
     print(message)
+
+
+def compile_test_program(lines, compiler):
+    f = open('tmp.cc', 'w')
+    status_write(
+        "debug_config: test compiling C++ program:\n"
+        + "----------------begin----------------"
+        + "\n")
+    for line in lines:
+        f.write(line)
+        status_write(line)
+    f.close()
+    status_write(
+        "-----------------end-----------------"
+        + "\n")
+    command = compiler + ' %s tmp.cc -o a.out %s' % (include_flags, link_flags)
+    status_write(
+        "debug_config: " + command
+        + "\n")
+    (error_status, output) = commands.getstatusoutput(command)
+    status_write(
+        "debug_config: compilation completed with status " + str(status)
+        + " and output:\n"
+        + output
+        + "\n")
+    return not error_status
+
+
+def listify(x):
+    if type(x) == type([]) or type(x) == type(()):
+        return x
+    else:
+        return [x]
+
+
+def find_library_version(library, headers, define=None,
+                         include_flags='', link_flags='',
+                         compiler='c++',
+                         prefixes=['/usr', '/usr/local']):
+    lines = []
+    lines.append('#include <stdio>\n\n')
+    lines.append('int main()\n{\n')
+    if define:
+        lines.append('    std::cout << "{}" << std::endl;\n'.format(define))
+    else:
+        lines.append('    std::cout << "success!\n" << std::endl;')
+    lines.append('    return 0;\n')
+    lines.append('}\n')
+
+    olddir = os.getcwd()
+    tmpdir = tempfile.mkdtemp()
+    os.chdir(tmpdir)
+    headers_list = listify(headers)
+    good_prefix = None
+    version = None
+    for prefix in prefixes:
+        include_lines = []
+        for header in headers_list:
+            full_path = os.path.join(prefix, header)
+            include_lines.append('#include "{}"\n'.format(full_path))
+        if compile_test_program(include_lines + lines):
+            good_prefix = prefix
+            break
+    if good_prefix and define:
+        status_write(
+            "debug_config: executing ./a.out:"
+            + "\n")
+        (status, output) = commands.getstatusoutput('./a.out')
+        status_write(
+            "debug_config: execution completed with status " + str(status)
+            + " and output: "
+            + output
+            + "\n")
+        if not status:
+            version = output.rstrip()
+    os.chdir(olddir)
+    (status, output) = commands.getstatusoutput('/bin/rm -r %s' % tmpdir)
+    return External_package(library, version, good_prefix)
 
 
 def version_acceptable(the_str, min_version_list):
