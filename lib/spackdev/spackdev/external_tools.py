@@ -74,7 +74,8 @@ def listify(x):
         return [x]
 
 
-def find_library_version(library, headers, define=None,
+def find_library_version(library, headers,
+                         define=None, regexp=None,
                          include_flags='', link_flags='',
                          compiler='c++',
                          prefixes=['/usr', '/usr/local']):
@@ -114,7 +115,11 @@ def find_library_version(library, headers, define=None,
             + output
             + "\n")
         if not status:
-            version = output.rstrip()
+            if regexp:
+                match = re.search(regexp, output)
+                version = match.group(0)
+            else:
+                version = output.rstrip()
     os.chdir(olddir)
     (status, output) = commands.getstatusoutput('/bin/rm -r %s' % tmpdir)
     return External_package(library, version, good_prefix)
