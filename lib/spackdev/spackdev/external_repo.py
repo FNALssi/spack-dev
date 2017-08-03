@@ -16,7 +16,7 @@ def parent_dir(path, n):
 
 
 def mod_to_class(name):
-    return name.capitalize()
+    return name.replace('-', '_').capitalize()
 
 
 class External_repo:
