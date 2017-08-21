@@ -15,19 +15,6 @@ def setup_parser(subparser):
     #     help="do not stage packages")
 
 def findext(parser, args):
-    print('jfa: findext start')
     external_repo = External_repo()
-    # print('jfa: external_repo.all_external_names() =', external_repo.all_external_names())
-    # for pkg in external_repo.all_external_names():
-    #     print('{}:'.format(pkg))
-    #     external_repo.get_pkg_class(pkg)().find()
-
-    print('jfa: reading packages.yaml:')
     packages_yaml = Packages_yaml()
-    print('jfa: pre_lines:')
-    for line in packages_yaml.pre_lines:
-        print(line.rstrip())
-    print('jfa: post_lines:')
-    for line in packages_yaml.post_lines:
-        print(line.rstrip())
     packages_yaml.write_file(external_repo.all_external_packages())
