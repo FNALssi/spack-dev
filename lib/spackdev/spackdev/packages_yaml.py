@@ -88,7 +88,6 @@ class Packages_yaml:
             if external_package.version:
                 outfile.write('@' + external_package.version)
             outfile.write(': ' + external_package.pathname + '\n')
-            outfile.write(self.indent + self.indent + 'buildable: False\n')
 
         def add_external_package(self, external_package):
             self.external_packages[external_package.name] = external_package
