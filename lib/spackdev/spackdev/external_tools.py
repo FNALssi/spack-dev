@@ -18,22 +18,33 @@ def find_executable_version(executable, version_arg='--version',
                             version_regexp='[0-9]+\.[0-9\.]+[0-9a-z-]*'):
     pathname = which_executable_in_path(executable)
     if pathname:
+        prefix = os.path.dirname(os.path.dirname(pathname))
         version = extract_executable_version(pathname, version_arg,
                                              version_regexp)
     else:
+        prefix = None
         version = None
-    return External_package(executable, version, pathname)
+    return External_package(executable, version, prefix)
 
 
 def which_executable_in_path(executable):
     return distutils.spawn.find_executable(executable)
 
 
-def extract_executable_version(pathname, arg='--version', regexp='[0-9]+\.[0-9\.]+[0-9a-z-]*'):
+def extract_executable_version(pathname, arg='--version', 
+        regexp='[0-9]+\.[0-9\.]+[0-9a-z-]*'):
     command = "{0} {1}".format(pathname, arg)
     (status, output) = commands.getstatusoutput(command)
     match = re.search(regexp, output)
-    return match.group(0)
+    if match:
+        retval = match.group(0)
+    else:
+        sys.stderr.write('extract_executable_version failed to find a version running\n'
+            + command + '\n'
+            + 'with output\n' +
+            output + '\n')
+        retval = None
+    return retval
 
 
 def status_write(message, verbose):
