@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import argparse
 from spackdev import External_repo, Packages_yaml
-description = "describe a spackdev area"
+description = "search for system packages and add to packages.yaml"
 
 
 def setup_parser(subparser):
