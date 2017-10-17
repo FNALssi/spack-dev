@@ -227,7 +227,7 @@ def write_cmakelists(packages, dependencies):
 
 def get_environment(package):
     environment = []
-    status, output = spack_cmd(["env", package])
+    status, output = spack_cmd(['env', '--spackdev', package])
     variables = ['CC', 'CXX', 'F77', 'FC', 'CMAKE_PREFIX_PATH', 'PATH']
     for line in output.split('\n'):
         for variable in variables:
