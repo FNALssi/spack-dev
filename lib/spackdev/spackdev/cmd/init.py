@@ -278,7 +278,7 @@ def copy_modified_script(source, dest, environment):
 def create_cmake_wrapper(wrappers_dir, environment):
     filename = os.path.join(wrappers_dir, 'cmake')
     f = open(filename, 'w')
-    f.write('/bin/sh\n')
+    f.write('# /bin/sh\n')
     f.write('\n# begin spack variables\n')
     for envvar in environment:
         f.write('export ' + envvar + '\n')
@@ -287,8 +287,7 @@ def create_cmake_wrapper(wrappers_dir, environment):
 
     f.write('cmake "$@"\n')
     f.close()
-    st = os.stat(filename)
-    os.chmod(filename, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    os.chmod(filename, 0755)
 
 def create_wrappers(package, environment):
     # print 'jfa start create_wrappers'
@@ -306,6 +305,8 @@ def create_wrappers(package, environment):
                     value = value[1:-1]
                 filename = os.path.basename(value)
                 dest = os.path.join(wrappers_dir, filename)
+                environment[index] = var + '=' + \
+                                     os.path.join(os.getcwd(), dest)
                 copy_modified_script(value, dest, environment)
     create_cmake_wrapper(wrappers_dir, environment)
         # else:
@@ -370,8 +371,7 @@ if __name__ == '__main__':
     stage(package, method, the_dict)
     ''')
     stage_py.close()
-    stage_py_st = os.stat(stage_py_filename)
-    os.chmod(stage_py_filename, stage_py_st.st_mode | stat.S_IEXEC)
+    os.chmod(stage_py_filename, 0755)
 
 def create_environment(packages):
     pkg_environments = {}
