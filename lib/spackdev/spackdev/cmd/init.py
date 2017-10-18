@@ -141,7 +141,7 @@ def get_additional(requesteds, dependencies):
 def init_cmakelists(project='spackdev'):
     f = open(os.path.join('spackdev', 'CMakeLists.txt'), 'w')
     f.write(
-'''cmake_minimum_required(VERSION 2.8.8)
+'''cmake_minimum_required(VERSION 2.8)
 project({})
 set(SPACKDEV_SOURCE_DIR "{}")
 '''.format(project, os.getcwd()))
@@ -149,6 +149,8 @@ set(SPACKDEV_SOURCE_DIR "{}")
 
 def add_package_to_cmakelists(cmakelists, package, dependencies):
 
+    cmake_wrapper = os.path.join(os.getcwd(), 'spackdev', package, 'bin',
+                                 'cmake')
     cmakelists.write(
 '''
 # {package}
@@ -156,12 +158,12 @@ file(MAKE_DIRECTORY ${{CMAKE_BINARY_DIR}}/tags/{package})
 file(MAKE_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package})
 
 add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
-  COMMAND cmake
+  COMMAND {cmake_wrapper} 
       -G Ninja
       -DCMAKE_INSTALL_PREFIX=${{CMAKE_BINARY_DIR}}/install
       ${{SPACKDEV_SOURCE_DIR}}/{package} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
   WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
-'''.format(package=package))
+'''.format(package=package, cmake_wrapper=cmake_wrapper))
 
     for dependency in dependencies:
         cmakelists.write("  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{dependency}/install\n".
@@ -273,6 +275,20 @@ def copy_modified_script(source, dest, environment):
     outfile.close()
     os.chmod(dest, 0755)
 
+def create_cmake_wrapper(wrappers_dir, environment):
+    filename = os.path.join(wrappers_dir, 'cmake')
+    f = open(filename, 'w')
+    f.write('/bin/sh\n')
+    f.write('\n# begin spack variables\n')
+    for envvar in environment:
+        f.write('export ' + envvar + '\n')
+    f.write('\n# end spack variables\n')
+    f.write('\n')
+
+    f.write('cmake "$@"\n')
+    f.close()
+    st = os.stat(filename)
+    os.chmod(filename, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 def create_wrappers(package, environment):
     # print 'jfa start create_wrappers'
@@ -291,6 +307,7 @@ def create_wrappers(package, environment):
                 filename = os.path.basename(value)
                 dest = os.path.join(wrappers_dir, filename)
                 copy_modified_script(value, dest, environment)
+    create_cmake_wrapper(wrappers_dir, environment)
         # else:
         #     print 'jfa: failed to parse environment line:'
         #     print environment[index]
@@ -406,7 +423,7 @@ def write_packages_file(requesteds, additional):
 def create_build_area():
     os.mkdir('build')
     os.chdir('build')
-    external_cmd(['cmake', '../spackdev', '-GNinja'])
+    external_cmd(['cmake', '../spackdev', '-G"Unix Makefiles"'])
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
