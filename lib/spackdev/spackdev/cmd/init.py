@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 import argparse
 from spackdev import spack_cmd, external_cmd
@@ -276,7 +277,7 @@ def copy_modified_script(source, dest, environment):
     outfile.close()
     os.chmod(dest, 0755)
 
-def create_cmake_wrapper(wrappers_dir, environment):
+def create_cmake_wrapper(wrappers_dir, environment, dependencies, all_packages):
     filename = os.path.join(wrappers_dir, 'cmake')
     f = open(filename, 'w')
     f.write('# /bin/sh\n')
@@ -285,12 +286,16 @@ def create_cmake_wrapper(wrappers_dir, environment):
         f.write('export ' + envvar + '\n')
     f.write('\n# end spack variables\n')
     f.write('\n')
-
+    for dep in dependencies:
+        if dep in all_packages:
+            package_src = os.path.join(os.getcwd(), dep)
+            f.write('CMAKE_PREFIX_PATH="' + package_src +
+                    ':$CMAKE_PREFIX_PATH"\n')
     f.write('cmake "$@"\n')
     f.close()
     os.chmod(filename, 0755)
 
-def create_wrappers(package, environment):
+def create_wrappers(package, environment, dependencies, all_packages):
     # print 'jfa start create_wrappers'
     wrappers_dir = os.path.join('spackdev', package, 'bin')
     # wrappers_dir = os.path.join('env', package, 'bin')
@@ -309,7 +314,7 @@ def create_wrappers(package, environment):
                 environment[index] = var + '=' + \
                                      os.path.join(os.getcwd(), dest)
                 copy_modified_script(value, dest, environment)
-    create_cmake_wrapper(wrappers_dir, environment)
+    create_cmake_wrapper(wrappers_dir, environment, dependencies, all_packages)
         # else:
         #     print 'jfa: failed to parse environment line:'
         #     print environment[index]
@@ -374,7 +379,7 @@ if __name__ == '__main__':
     stage_py.close()
     os.chmod(stage_py_filename, 0755)
 
-def create_environment(packages):
+def create_environment(packages, all_dependencies):
     pkg_environments = {}
     for package in packages:
         environment = get_environment(package)
@@ -382,7 +387,9 @@ def create_environment(packages):
         # print package,':'
         # for line in environment:
         #     print line
-        create_wrappers(package, environment)
+        create_wrappers(package, environment,
+                        all_dependencies.get_dependencies(package),
+                        packages)
         create_env_sh(package, environment)
         create_stage_script(package)
     return pkg_environments
@@ -424,7 +431,7 @@ def write_packages_file(requesteds, additional):
 def create_build_area():
     os.mkdir('build')
     os.chdir('build')
-    external_cmd(['cmake', '../spackdev', '-G"Unix Makefiles"'])
+    external_cmd(['cmake', '../spackdev', '-GNinja'])
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
@@ -456,7 +463,7 @@ def init(parser, args):
     write_cmakelists(all_packages, all_dependencies)
 
     tty.msg('creating wrapper scripts')
-    pkg_environments = create_environment(all_packages)
+    pkg_environments = create_environment(all_packages, all_dependencies)
 
     if not args.no_dependencies:
         install_dependencies(all_packages)
