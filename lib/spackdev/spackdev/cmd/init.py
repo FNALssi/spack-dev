@@ -132,10 +132,11 @@ def get_all_dependencies(packages):
 def get_additional(requesteds, dependencies):
     additional = []
     for package in dependencies.get_all_packages():
-        package_dependencies = dependencies.get_dependencies(package)
-        for requested in requesteds:
-            if requested in package_dependencies:
-                append_unique(package, additional)
+        if not package in requesteds:
+            package_dependencies = dependencies.get_dependencies(package)
+            for requested in requesteds:
+                if requested in package_dependencies:
+                    append_unique(package, additional)
     return additional
 
 def init_cmakelists(project='spackdev'):
