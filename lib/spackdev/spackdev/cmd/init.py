@@ -264,7 +264,11 @@ def copy_modified_script(source, dest, environment):
                 outfile.write('export ' + var + '\n')
             s_spack = re.match('^SPACK_.*', var)
             if s_spack:
-                outfile.write(pair + '\n')
+                if var == 'SPACK_PREFIX':
+                    spack_prefix = os.path.join(os.getcwd(), 'build', 'install')
+                    outfile.write(var + '=' + spack_prefix + '\n')
+                else:
+                    outfile.write(pair + '\n')
                 outfile.write('export ' + var + '\n')
         # else:
         #     print "jfa: failed (again?) to parse environment line:"
