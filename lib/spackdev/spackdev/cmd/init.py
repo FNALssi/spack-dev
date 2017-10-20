@@ -467,7 +467,7 @@ def setup_parser(subparser):
     subparser.add_argument('-d', '--no-dependencies', action='store_true', dest='no_dependencies',
                            help="do not have spack install dependent packages")
     subparser.add_argument('-m', '--make', action='store_true', dest='make',
-        help="use make instead of {build_command}")
+        help="use make instead of ninja")
     subparser.add_argument('-s', '--no-stage', action='store_true', dest='no_stage',
         help="do not stage packages")
 
