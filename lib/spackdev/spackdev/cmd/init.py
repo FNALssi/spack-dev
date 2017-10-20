@@ -6,6 +6,8 @@ from spackdev import spack_cmd, external_cmd
 from spackdev import stage_packages, install_dependencies
 from spackdev.spack_import import tty
 from spackdev.spack_import import yaml
+from spackdev import which
+
 # from spackdev.spack import Spec
 import re
 import glob
@@ -74,6 +76,24 @@ class Dependencies:
             if other in self.get_dependencies(package):
                 retval = True
         return retval
+
+class Build_system:
+    def __init__(self, system_type):
+        self.label = system_type
+        if system_type == 'make':
+            self.build_command = 'make'
+            self.cmake_label = '"Unix Makefiles"'
+        elif system_type == 'ninja':
+            if which('ninja'):
+                self.build_command = 'ninja'
+            elif which('ninja-build'):
+                self.build_command = 'ninja-build'
+            else:
+                tty.msg('warning: ninja build selected, but neither "ninja" nor "ninja-build are avalable')
+                self.build_command = 'ninja'
+            self.cmake_label = 'Ninja'
+        else:
+            tty.die('Build_system: must be either "make" or "ninja"')
 
 
 def extract_stage_dir_from_output(output, package):
@@ -149,7 +169,7 @@ set(SPACKDEV_SOURCE_DIR "{}")
 '''.format(project, os.getcwd()))
     return f
 
-def add_package_to_cmakelists(cmakelists, package, dependencies):
+def add_package_to_cmakelists(cmakelists, package, dependencies, build_system):
 
     cmake_wrapper = os.path.join(os.getcwd(), 'spackdev', package, 'bin',
                                  'cmake')
@@ -161,11 +181,12 @@ file(MAKE_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package})
 
 add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
   COMMAND {cmake_wrapper} 
-      -G Ninja
+      -G {cmake_build_label}
       -DCMAKE_INSTALL_PREFIX=${{CMAKE_BINARY_DIR}}/install
       ${{SPACKDEV_SOURCE_DIR}}/{package} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
   WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
-'''.format(package=package, cmake_wrapper=cmake_wrapper))
+'''.format(package=package, cmake_wrapper=cmake_wrapper,
+           cmake_build_label=build_system.cmake_label))
 
     for dependency in dependencies:
         cmakelists.write("  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{dependency}/install\n".
@@ -182,41 +203,42 @@ set_source_files_properties(
   PROPERTIES GENERATED TRUE
 )
 
-add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/ninja
-  COMMAND ninja && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/ninja_dummy
+add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}
+  COMMAND {build_command} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}_dummy
   WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
   DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
 )
 
-add_custom_target(tags_{package}_ninja
-DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/ninja)
-add_dependencies(tags_{package}_ninja tags_{package}_cmake)
+add_custom_target(tags_{package}_{build_label}
+DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label})
+add_dependencies(tags_{package}_{build_label} tags_{package}_cmake)
 
 set_source_files_properties(
-  ${{CMAKE_BINARY_DIR}}/tags/{package}/ninja
+  ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}
   PROPERTIES GENERATED TRUE
 )
 
 add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/install
-  COMMAND ninja install && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/install_dummy
+  COMMAND {build_command} install && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/install_dummy
   WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
-  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/ninja
+  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}
 )
 
 add_custom_target(tags_{package}_install
   ALL
   DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/install)
 
-add_dependencies(tags_{package}_install tags_{package}_ninja)
+add_dependencies(tags_{package}_install tags_{package}_{build_label})
 
 set_source_files_properties(
   ${{CMAKE_BINARY_DIR}}/tags/{package}/install
   PROPERTIES GENERATED TRUE
 )
 
-'''.format(package=package))
+'''.format(package=package, build_command=build_system.build_command,
+           build_label=build_system.label))
 
-def write_cmakelists(packages, dependencies):
+def write_cmakelists(packages, dependencies, build_system):
     cmakelists = init_cmakelists()
     remaining_packages = copy.copy(packages)
     while remaining_packages != []:
@@ -226,7 +248,8 @@ def write_cmakelists(packages, dependencies):
                 for dependency in dependencies.get_dependencies(package):
                     if dependency in packages:
                         package_dependencies.append(dependency)
-                add_package_to_cmakelists(cmakelists, package, package_dependencies)
+                add_package_to_cmakelists(cmakelists, package,
+                                          package_dependencies, build_system)
                 remaining_packages.remove(package)
 
 def get_environment(package):
@@ -432,16 +455,19 @@ def write_packages_file(requesteds, additional):
         f.write(str(requesteds) + '\n')
         f.write(str(additional) + '\n')
 
-def create_build_area():
+def create_build_area(build_system):
     os.mkdir('build')
     os.chdir('build')
-    external_cmd(['cmake', '../spackdev', '-GNinja'])
+    external_cmd(['cmake', '../spackdev',
+                  '-G{}'.format(build_system.cmake_label)])
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
                            help="specs of packages to add to SpackDev area")
     subparser.add_argument('-d', '--no-dependencies', action='store_true', dest='no_dependencies',
-        help="do not have spack install dependent packages")
+                           help="do not have spack install dependent packages")
+    subparser.add_argument('-m', '--make', action='store_true', dest='make',
+        help="use make instead of {build_command}")
     subparser.add_argument('-s', '--no-stage', action='store_true', dest='no_stage',
         help="do not stage packages")
 
@@ -464,7 +490,11 @@ def init(parser, args):
     write_packages_file(requesteds, additional)
     all_packages = requesteds + additional
 
-    write_cmakelists(all_packages, all_dependencies)
+    if args.make:
+        build_system = Build_system('make')
+    else:
+        build_system = Build_system('ninja')
+    write_cmakelists(all_packages, all_dependencies, build_system)
 
     tty.msg('creating wrapper scripts')
     pkg_environments = create_environment(all_packages, all_dependencies)
@@ -477,4 +507,4 @@ def init(parser, args):
 
     #create_build_scripts(all_packages, pkg_environments)
     tty.msg('creating build area')
-    create_build_area()
+    create_build_area(build_system)
