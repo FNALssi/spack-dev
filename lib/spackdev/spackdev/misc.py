@@ -7,6 +7,11 @@ import ast
 import time
 from spack_import import tty
 
+if sys.version_info[0] > 2 and sys.version_info[1] > 2:
+    import shutil
+else:
+    from distutils import spawn
+
 def spack_cmd(args):
     argstr = ' '.join(args)
     cmd = "spack " + argstr
@@ -38,3 +43,8 @@ def read_packages_file():
         additional = ast.literal_eval(f.readline())
     return requesteds, additional
 
+def which(executable):
+    if sys.version_info[0] > 2 and sys.version_info[1] > 2:
+        return shutil.which(executable)
+    else:
+        return spawn.find_executable(executable)
