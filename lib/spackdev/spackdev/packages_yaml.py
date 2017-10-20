@@ -59,6 +59,9 @@ class Packages_yaml:
             backup_filename = self.filename + '.findext'
             # print('jfa: copy {} {}'.format(self.filename, backup_filename))
             shutil.copy(self.filename, backup_filename)
+        dirname = os.path.dirname(self.filename)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
         f = open(self.filename, 'w')
         for line in self.pre_lines:
             f.write(line)
