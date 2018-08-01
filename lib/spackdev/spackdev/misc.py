@@ -39,9 +39,13 @@ def external_cmd(args):
 def read_packages_file():
     packages_filename = os.path.join('spackdev', 'packages.sd')
     with open(packages_filename, 'r') as f:
-        requesteds = ast.literal_eval(f.readline())
-        additional = ast.literal_eval(f.readline())
-    return requesteds, additional
+        first_line = f.readline().rstrip()
+        if first_line.find('[') > -1:
+            tty.die('packages.sd in obsolete (unsafe) format: please initialize a new spackdev area.')
+        requesteds = first_line.split()
+        additional = f.readline().rstrip().split()
+        install_args = f.readline().rstrip()
+    return requesteds, additional, install_args
 
 def which(executable):
     if sys.version_info[0] > 2 and sys.version_info[1] > 2:

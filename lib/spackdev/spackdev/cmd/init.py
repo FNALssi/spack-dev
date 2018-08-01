@@ -9,15 +9,18 @@ from spackdev.spack_import import yaml
 from spackdev import which
 
 # from spackdev.spack import Spec
-import re
+import copy
 import glob
 import os
-import copy
+import re
 import shutil
 import stat
+import subprocess
 import sys
 
+
 description = "initialize a spackdev area"
+
 
 def append_unique(item, the_list):
     if type(item) == list:
@@ -30,20 +33,17 @@ def append_unique(item, the_list):
 class Dependencies:
     def __init__(self):
         self.deps = {}
-        self.all_packages = []
+        self.all_packages = {}
 
-    def add(self, package, dependency):
-        if type(dependency) == list:
-            for item in dependency:
-                self.add(package, item)
+    def add(self, package, spec, dependencies):
+        if not self.deps.has_key(package):
+            self.deps[package] = dependencies.keys()
         else:
-            if not self.deps.has_key(package):
-                self.deps[package] = [dependency]
-                self._append_unique(package, self.all_packages)
-                self._append_unique(dependency, self.all_packages)
-            if dependency and (not dependency in self.deps[package]):
-                self.deps[package].append(dependency)
-                self._append_unique(dependency, self.all_packages)
+            append_unique(dependencies.keys(), self.deps[package])
+        self.all_packages[package] = spec
+        self.all_packages.update\
+            ({key: val for (key, val) in dependencies.iteritems() if not
+              self.all_packages.has_key(key)})
 
     def get_dependencies(self, package):
         if self.deps.has_key(package):
@@ -52,30 +52,28 @@ class Dependencies:
             retval = []
         return retval
 
-    def _append_unique(self, item, the_list):
-        if type(item) == list:
-            for subitem in item:
-                # print 'wtf calling with', subitem
-                self._append_unique(subitem, the_list)
-        elif (not item in the_list) and (not item == []):
-            the_list.append(item)
-
-    def get_all_dependencies(self, package, retval = []):
+    def get_all_dependencies(self, package, retval = None):
+        if retval is None:
+            retval = []
         for subpackage in self.get_dependencies(package):
-            self._append_unique(subpackage, retval)
-            for subsubpackage in self.get_dependencies(subpackage):
-                self._append_unique(self.get_dependencies(subsubpackage), retval)
+            append_unique(subpackage, retval)
+            self.get_all_dependencies(subpackage, retval)
         return retval
 
     def get_all_packages(self):
         return self.all_packages
 
+    def package_info(self, package):
+        # Will raise KeyError if package is not found.
+        return self.all_packages[package]
+
     def has_dependency(self, package, other_packages):
-        retval = False
         for other in other_packages:
             if other in self.get_dependencies(package):
-                retval = True
-        return retval
+                return True
+        else:
+            return False
+
 
 class Build_system:
     def __init__(self, system_type):
@@ -89,7 +87,7 @@ class Build_system:
             elif which('ninja-build'):
                 self.build_command = 'ninja-build'
             else:
-                tty.msg('warning: ninja build selected, but neither "ninja" nor "ninja-build are avalable')
+                tty.msg('warning: ninja build selected, but neither "ninja" nor "ninja-build" are available')
                 self.build_command = 'ninja'
             self.cmake_label = 'Ninja'
         else:
@@ -110,6 +108,7 @@ def extract_stage_dir_from_output(output, package):
     else:
         raise RuntimeError("extract_stage_dir_from_output: failed to find stage_dir")
 
+
 def yaml_to_specs(yaml_text):
     documents = []
     document = ''
@@ -124,41 +123,49 @@ def yaml_to_specs(yaml_text):
         documents.append(document)
     super_specs = map(yaml.load, documents)
     specs = {}
-    for sub_spec in super_specs[0]['spec']:
-        key = sub_spec.keys()[0]
-        value = sub_spec[key]
-        specs[key] = value
+    for spec in super_specs:
+        for sub_spec in spec['spec']:
+            specs.update({key: value for (key, value) in sub_spec.iteritems() if key not in specs})
     return specs
 
-def extract_specs(packages):
+
+def extract_specs(spec_source):
     cmd = ['spec', '--yaml']
-    cmd.extend(packages)
+    if type(spec_source) == list:
+        # List of packages.
+        cmd.extend(spec_source)
+    else:
+        # File containing spack install specification.
+        with open(spec_source, 'r') as dag_file:
+            cmd.append(dag_file.read().rstrip())
     status, output = spack_cmd(cmd)
     specs = yaml_to_specs(output)
     return specs
 
-def get_all_dependencies(packages):
+
+def calculate_dependencies(specs):
     dependencies = Dependencies()
-    specs = extract_specs(packages)
     for name in specs.keys():
         if specs[name].has_key('dependencies'):
-            package_dependencies = specs[name]['dependencies'].keys()
+            spec_deps = specs[name]['dependencies']
+            package_dependencies \
+                = {d: spec_deps[d] for d in spec_deps.keys()}
         else:
-            package_dependencies = []
-        dependencies.add(name, package_dependencies)
-    for package in dependencies.get_all_packages():
-        package_dependencies = dependencies.get_dependencies(package)
+            package_dependencies = {}
+        dependencies.add(name, specs[name], package_dependencies)
     return dependencies
 
-def get_additional(requesteds, dependencies):
+
+def get_additional(requested, dependencies):
     additional = []
-    for package in dependencies.get_all_packages():
-        if not package in requesteds:
-            package_dependencies = dependencies.get_dependencies(package)
-            for requested in requesteds:
-                if requested in package_dependencies:
-                    append_unique(package, additional)
+    for package in requested:
+        append_unique([dep for dep in
+                       dependencies.get_all_dependencies(package) if
+                       dep not in requested and
+                       dependencies.has_dependency(dep, requested)],
+                      additional)
     return additional
+
 
 def init_cmakelists(project='spackdev'):
     f = open(os.path.join('spackdev', 'CMakeLists.txt'), 'w')
@@ -168,6 +175,7 @@ project({})
 set(SPACKDEV_SOURCE_DIR "{}")
 '''.format(project, os.getcwd()))
     return f
+
 
 def add_package_to_cmakelists(cmakelists, package, dependencies, build_system):
 
@@ -238,6 +246,7 @@ set_source_files_properties(
 '''.format(package=package, build_command=build_system.build_command,
            build_label=build_system.label))
 
+
 def write_cmakelists(packages, dependencies, build_system):
     cmakelists = init_cmakelists()
     remaining_packages = copy.copy(packages)
@@ -252,20 +261,23 @@ def write_cmakelists(packages, dependencies, build_system):
                                           package_dependencies, build_system)
                 remaining_packages.remove(package)
 
+
 def get_environment(package):
-    environment = []
-    status, output = spack_cmd(['env', '--spackdev', package])
-    variables = ['CC', 'CXX', 'F77', 'FC', 'CMAKE_PREFIX_PATH', 'PATH']
-    for line in output.split('\n'):
-        for variable in variables:
-            s_var = re.match('^{}=.*'.format(variable), line)
-            if s_var:
-                environment.append(line)
-        s_spack = re.match('^SPACK_.*=.*', line)
-        if s_spack:
-            environment.append(line)
-    environment.sort()
+    package_env_file_name = '{0}-environment.txt'.format(package)
+    status, output \
+        = spack_cmd(['env', '--dump', package, package_env_file_name])
+    package_env_file = open(package_env_file_name, 'r')
+    package_env = package_env_file.read()
+    environment = {}
+    # Deal with possibly quoted values.
+    var_regex \
+        = re.compile(r'^export ([A-Za-z_][A-Za-z_0-9()]*)=((?P<sp>\')?.*?(?(sp)\')$)',
+                     re.DOTALL | re.MULTILINE)
+    for match in var_regex.finditer(package_env):
+        if not match.group(1).startswith('BASH_FUNC'):
+            environment[match.group(1)] = match.group(2)
     return environment
+
 
 def copy_modified_script(source, dest, environment):
     infile = open(source, 'r')
@@ -277,25 +289,18 @@ def copy_modified_script(source, dest, environment):
 
     # insert select variables
     outfile.write('# begin SpackDev variables\n')
-    for pair in environment:
-        s = re.match('([a-zA-Z0-9_]*)=(.*)', pair)
-        if s:
-            var = s.group(1)
-            value = s.group(2)
-            if var in ['CMAKE_PREFIX_PATH', 'PATH']:
-                outfile.write(pair + '\n')
-                outfile.write('export ' + var + '\n')
-            s_spack = re.match('^SPACK_.*', var)
-            if s_spack:
-                if var == 'SPACK_PREFIX':
-                    spack_prefix = os.path.join(os.getcwd(), 'build', 'install')
-                    outfile.write(var + '=' + spack_prefix + '\n')
-                else:
-                    outfile.write(pair + '\n')
-                outfile.write('export ' + var + '\n')
-        # else:
-        #     print "jfa: failed (again?) to parse environment line:"
-        #     print pair
+    for var, value in sorted(environment.iteritems()):
+        if var in ['CMAKE_PREFIX_PATH', 'PATH']:
+            outfile.write('{0}={1}\n'.format(var,value))
+            outfile.write('export {0}\n'.format(var))
+        s_spack = re.match('^SPACK_.*', var)
+        if s_spack:
+            if var == 'SPACK_PREFIX':
+                spack_prefix = os.path.join(os.getcwd(), 'build', 'install')
+                outfile.write(var + '=' + spack_prefix + '\n')
+            else:
+                outfile.write('{0}={1}\n'.format(var,value))
+            outfile.write('export {0}\n'.format(var))
     outfile.write('# end SpackDev variables\n')
 
     # copy the rest
@@ -304,17 +309,19 @@ def copy_modified_script(source, dest, environment):
     outfile.close()
     os.chmod(dest, 0755)
 
-def create_cmake_wrapper(wrappers_dir, environment, dependencies, all_packages):
+
+def create_cmake_wrapper(wrappers_dir, environment, dependencies, dev_packages):
     filename = os.path.join(wrappers_dir, 'cmake')
     f = open(filename, 'w')
     f.write('# /bin/sh\n')
     f.write('\n# begin spack variables\n')
-    for envvar in environment:
-        f.write('export ' + envvar + '\n')
+    for var, value in sorted(environment.iteritems()):
+        f.write('{0}={1}\n'.format(var,value))
+        f.write('export {0}\n'.format(var))
     f.write('\n# end spack variables\n')
     f.write('\n')
     for dep in dependencies:
-        if dep in all_packages:
+        if dep in dev_packages:
             package_src = os.path.join(os.getcwd(), dep)
             f.write('CMAKE_PREFIX_PATH="' + package_src +
                     ':$CMAKE_PREFIX_PATH"\n')
@@ -322,30 +329,24 @@ def create_cmake_wrapper(wrappers_dir, environment, dependencies, all_packages):
     f.close()
     os.chmod(filename, 0755)
 
-def create_wrappers(package, environment, dependencies, all_packages):
+
+def create_wrappers(package, environment, dependencies, dev_packages):
     # print 'jfa start create_wrappers'
     wrappers_dir = os.path.join('spackdev', package, 'bin')
     # wrappers_dir = os.path.join('env', package, 'bin')
     if not os.path.exists(wrappers_dir):
         os.makedirs(wrappers_dir)
-    for index in range(0, len(environment)):
-        s = re.match('([a-zA-Z0-9_]*)=(.*)', environment[index])
-        if s:
-            var = s.group(1)
-            value = s.group(2)
-            if var in ['CC', 'CXX', 'F77', 'FC']:
-                if value[0] == "'" and value[-1] == "'":
-                    value = value[1:-1]
-                filename = os.path.basename(value)
-                dest = os.path.join(wrappers_dir, filename)
-                environment[index] = var + '=' + \
-                                     os.path.join(os.getcwd(), dest)
-                copy_modified_script(value, dest, environment)
-    create_cmake_wrapper(wrappers_dir, environment, dependencies, all_packages)
-        # else:
-        #     print 'jfa: failed to parse environment line:'
-        #     print environment[index]
-    # print 'jfa end create wrappers'
+    for var, value in sorted(environment.iteritems()):
+        if var in ['CC', 'CXX', 'F77', 'FC']:
+            if value[0] == "'" and value[-1] == "'":
+                # It's been quoted: we need the shell to unquote it.
+                value=subprocess.call("echo {0}".format(value), shell=True)
+            filename = os.path.basename(value)
+            dest = os.path.join(wrappers_dir, filename)
+            environment[var] = os.path.join(os.getcwd(), dest)
+            copy_modified_script(value, dest, environment)
+    create_cmake_wrapper(wrappers_dir, environment, dependencies, dev_packages)
+
 
 def create_env_sh(package, environment):
     env_dir = os.path.join('spackdev', package, 'env')
@@ -354,8 +355,9 @@ def create_env_sh(package, environment):
     pathname = os.path.join(env_dir, 'env.sh')
     # pathname = os.path.join('env', package, 'env.sh')
     outfile = open(pathname, 'w')
-    for line in environment:
-        outfile.write(line + '\n')
+    for var, value in sorted(environment.iteritems()):
+        outfile.write('{0}={1}\n'.format(var, value))
+
 
 def create_stage_script(package):
     bin_dir = os.path.join('spackdev', package, 'bin')
@@ -371,20 +373,23 @@ def create_stage_script(package):
     stage_py = open(stage_py_filename, 'w')
     stage_py.write('''#!/usr/bin/env python
 import os
+import subprocess
 import sys
 def stage(package, method, the_dict):
     if method == 'GitFetchStrategy':
-        cmd = 'git clone ' + the_dict['url'] + ' ' + package
-        retval = os.system(cmd)
+        cmd = ['git', 'clone']
+        if the_dict['branch']:
+            cmd.extend(['--branch', the_dict['branch']])
+        cmd.extend([the_dict['url'], package])
+        retval = subprocess.call(cmd)
         if retval != 0:
-            sys.stderr.write('"' + cmd + '" failed\\n')
+            sys.stderr.write('"' + ' '.join(cmd) + '" failed\\n')
             sys.exit(retval)
         os.chdir(package)
         if the_dict['tag']:
-            cmd = 'git checkout ' + the_dict['tag']
-            retval = os.system(cmd)
+            retval = subprocess.call(['git', 'checkout', the_dict['tag']])
             if retval != 0:
-                sys.stderr.write('"' + cmd + '" failed\\n')
+                sys.stderr.write('"' + ' '.join(cmd) + '" failed\\n')
                 sys.exit(retval)
     else:
         sys.stderr.write('SpackDev stage.py does not yet handle sources of type ' + method)
@@ -406,6 +411,7 @@ if __name__ == '__main__':
     stage_py.close()
     os.chmod(stage_py_filename, 0755)
 
+
 def create_environment(packages, all_dependencies):
     pkg_environments = {}
     for package in packages:
@@ -421,6 +427,7 @@ def create_environment(packages, all_dependencies):
         create_stage_script(package)
     return pkg_environments
 
+
 def extract_build_step_scripts(package, dry_run_filename):
     # f = open(dry_run_filename, 'r')
     # lines = f.readlines()
@@ -429,6 +436,7 @@ def extract_build_step_scripts(package, dry_run_filename):
     # print 'jfa: found', len(steps),'build steps'
     wrappers_dir = os.path.join('spackdev', package, 'bin')
     # wrappers_dir = os.path.join('env', package, 'bin')
+
 
 def extract_short_spec(package, pkg_environements):
     retval = None
@@ -440,6 +448,7 @@ def extract_short_spec(package, pkg_environements):
             retval = s2.group(1)
     return retval
 
+
 def create_build_scripts(packages, pkg_environments):
     for package in packages:
         os.chdir(package)
@@ -449,11 +458,61 @@ def create_build_scripts(packages, pkg_environments):
         os.chdir("..")
         extract_build_step_scripts(package, os.path.join(package, "spackdev.out"))
 
-def write_packages_file(requesteds, additional):
+
+def par_val_to_string(par, val):
+    if type(val) == list:
+        retval = ' {0}={1}'.format(par, ' '.join(val)) if val else ''
+    elif type(val) == tuple:
+        retval = ' {0}={1}'.format(par, ' '.join(val)) if val else ''
+    elif type(val) == bool:
+        retval = '+{0}'.format(par) if val else '~{0}'.format(par)
+    elif type(val) == None:
+        retval = ''
+    else:
+        retval = ' {0}={1}'.format(par, val)
+    return retval
+
+
+def install_args_for_package(package, all_dependencies):
+    package_info = all_dependencies.package_info(package)
+    version = '@{0}'.format(package_info['version'])
+    compiler = '%{0}@{1}'.format(package_info['compiler']['name'],
+                                 package_info['compiler']['version']) \
+        if package_info.has_key('compiler') else ''
+
+    pars = package_info['parameters']
+    bool_args = []
+    other_args = []
+    for (par, val) in pars.iteritems():
+        parstring = par_val_to_string(par, val)
+        if parstring:
+            alist = bool_args if parstring.startswith(('+', '~')) else \
+                    other_args
+            alist.append(parstring)
+    return [package, version, compiler] + bool_args + other_args
+
+
+def format_packages_for_install(packages, all_dependencies):
+    install_args = []
+    for package in packages:
+        install_args.append\
+            (''.join(install_args_for_package(package, all_dependencies)))
+        install_args.extend\
+            (["^{0}".format\
+              (''.join(install_args_for_package(dep,
+                                                all_dependencies)))
+              for dep in all_dependencies.get_all_dependencies(package)])
+    return ' '.join(install_args)
+
+
+def write_packages_file(requested, additional, all_dependencies):
     packages_filename = os.path.join('spackdev', 'packages.sd')
     with open(packages_filename, 'w') as f:
-        f.write(str(requesteds) + '\n')
-        f.write(str(additional) + '\n')
+        f.write(' '.join(requested) + '\n')
+        f.write(' '.join(additional) + '\n')
+        f.write(format_packages_for_install(requested + additional,
+                                            all_dependencies) + '\n')
+
 
 def create_build_area(build_system):
     os.mkdir('build')
@@ -461,9 +520,12 @@ def create_build_area(build_system):
     external_cmd(['cmake', '../spackdev',
                   '-G{}'.format(build_system.cmake_label)])
 
+
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
                            help="specs of packages to add to SpackDev area")
+    subparser.add_argument('--dag-file',
+                           help='packages and dependencies should be inferred from the DAG specified in this text file (in "spack install" format)')
     subparser.add_argument('-d', '--no-dependencies', action='store_true', dest='no_dependencies',
                            help="do not have spack install dependent packages")
     subparser.add_argument('-m', '--make', action='store_true', dest='make',
@@ -481,30 +543,37 @@ def init(parser, args):
         tty.die('spackdev init: cannot re-init (spackdev directory exists)')
     os.mkdir('spackdev')
 
-    requesteds = args.packages
-    tty.msg('requested packages: ' + str(' '.join(requesteds)))
-    all_dependencies = get_all_dependencies(requesteds)
-    additional = get_additional(requesteds, all_dependencies)
+    requested = args.packages
+    dag_filename = args.dag_file
+    tty.msg('requested packages: {0}{1}'.\
+            format(', '.join(requested),
+                   ' from DAG as specified in {0}'.format(dag_filename)
+                   if dag_filename else ''))
+    specs = extract_specs(dag_filename if dag_filename else requested)
+    all_dependencies = calculate_dependencies(specs)
+    additional = get_additional(requested, all_dependencies)
     if additional:
-        tty.msg('additional inter-dependent packages: ' + str(' '.join(additional)))
-    write_packages_file(requesteds, additional)
-    all_packages = requesteds + additional
+        tty.msg('additional inter-dependent packages: ' +
+                ' '.join(additional))
+    dev_packages = requested + additional
+    write_packages_file(requested, additional, all_dependencies)
 
     if args.make:
         build_system = Build_system('make')
     else:
         build_system = Build_system('ninja')
-    write_cmakelists(all_packages, all_dependencies, build_system)
+
+    write_cmakelists(dev_packages, all_dependencies, build_system)
 
     tty.msg('creating wrapper scripts')
-    pkg_environments = create_environment(all_packages, all_dependencies)
+    pkg_environments = create_environment(dev_packages, all_dependencies)
 
     if not args.no_dependencies:
-        install_dependencies(all_packages)
+        (retval, output) = install_dependencies()
 
     if not args.no_stage:
-        stage_packages(all_packages)
+        stage_packages(dev_packages)
 
-    #create_build_scripts(all_packages, pkg_environments)
+    #create_build_scripts(dev_packages, pkg_environments)
     tty.msg('creating build area')
     create_build_area(build_system)

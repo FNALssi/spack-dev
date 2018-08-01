@@ -18,8 +18,8 @@ def validate_args(packages, all_packages):
                     .format(package, all_packages))
 
 def stage(parser, args):
-    requesteds, additional = read_packages_file()
-    all_packages = requesteds + additional
+    requested, additional, install_args = read_packages_file()
+    all_packages = requested + additional
 
     validate_args(args.packages, all_packages)
     if len(args.packages) == 0:

@@ -3,14 +3,15 @@
 import os.path
 import sys
 from spack_import import tty
-from misc import external_cmd, spack_cmd
+from misc import external_cmd, spack_cmd, read_packages_file
 
-def install_dependencies(packages):
-    tty.msg('requesting spack install of dependent packages')
-    excludes = ','.join(packages)
-    install_packages = ' '.join(packages)
+def install_dependencies():
+    (requested, additional, install_args) = read_packages_file()
+    tty.msg('requesting spack install of dependencies for: {0}'
+            .format(' '.format(requested + additional)))
+    excludes = ','.join(requested + additional)
     retval, output = spack_cmd(['install', '--only dependencies',
-                                '--exclude', excludes, install_packages])
+                                '--exclude', excludes, install_args])
     return retval, output
 
 def stage_package(package):

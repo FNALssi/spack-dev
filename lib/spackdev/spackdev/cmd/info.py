@@ -32,9 +32,9 @@ def info(parser, args):
         sys.stderr.write('spackdev info: ' + dir + ' is not a SpackDev area\n')
         sys.exit(1)
 
-    requesteds, additional =  read_packages_file()
+    requested, additional, install_args =  read_packages_file()
     print('requested packages:')
-    for package in requesteds:
+    for package in requested:
         print('    ' + package)
     if len(additional) > 0:
         print('additional dependent packages:')
