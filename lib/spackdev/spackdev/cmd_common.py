@@ -20,7 +20,7 @@ def stage_package(package):
         tty.die('stage: directory "{}" exists.'.format(package))
     tty.msg('staging '  + package)
     stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-    retval, output = external_cmd([stage_py_filename])
+    retval, output = spack_cmd(['-d','stage', '-p', '%s/spackdev' % os.getcwd(), package])
     if retval != 0:
         tty.die('staging {} failed'.format(package))
 
