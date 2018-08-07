@@ -26,9 +26,7 @@ def stage_package(package):
     retval, output = spack_cmd(['stage', '-p', '%s/spackdev/.tmp' % os.getcwd(), package])
     if retval != 0:
         tty.die('staging {} failed'.format(package))
-    external_cmd(['rsync','-a','%s/spackdev/.tmp/%s/' % (os.getcwd(), package), '%s/spackdev/%s/' % (os.getcwd(), package) ]) 
-#    shutil.move('%s/spackdev/.tmp/%s' % (os.getcwd(), package), '%s/%s' % (os.getcwd(),package))
-    shutil.rmtree('%s/spackdev/.tmp/%s' % (os.getcwd(), package))
+    shutil.move('%s/spackdev/.tmp/%s' % (os.getcwd(), package), '%s/%s' % (os.getcwd(),package))
     os.remove('%s/spackdev/.tmp' % os.getcwd())
 
 def stage_packages(packages):
