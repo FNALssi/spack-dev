@@ -2,7 +2,6 @@
 
 import os.path
 import os
-import glob
 import shutil
 import sys
 from spack_import import tty
