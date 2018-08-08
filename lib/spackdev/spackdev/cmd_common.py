@@ -5,12 +5,18 @@ import sys
 from spack_import import tty
 from misc import external_cmd, spack_cmd, read_packages_file
 
-def install_dependencies():
-    (requested, additional, install_args) = read_packages_file()
+def install_dependencies(**kwargs):
+    if 'install_args' in kwargs:
+        install_args = kwargs['install_args']
+        dev_packages = kwargs['dev_packages']
+    else:
+        (requested, additional, install_args) = read_packages_file()
+        dev_packages = requested + additional
+
     tty.msg('requesting spack install of dependencies for: {0}'
-            .format(' '.format(requested + additional)))
-    excludes = ','.join(requested + additional)
-    retval, output = spack_cmd(['install', '--only dependencies',
+            .format(' '.join(dev_packages)))
+    excludes = ','.join(dev_packages)
+    retval, output = spack_cmd(['install', '--only', 'dependencies',
                                 '--exclude', excludes, install_args])
     return retval, output
 

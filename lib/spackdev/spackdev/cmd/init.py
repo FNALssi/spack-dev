@@ -170,14 +170,15 @@ def get_additional(requested, dependencies):
 def init_cmakelists(project='spackdev'):
     f = open(os.path.join('spackdev', 'CMakeLists.txt'), 'w')
     f.write(
-'''cmake_minimum_required(VERSION 2.8)
-project({})
-set(SPACKDEV_SOURCE_DIR "{}")
-'''.format(project, os.getcwd()))
+        '''cmake_minimum_required(VERSION ${{CMAKE_VERSION}})
+        project({0})
+        set(SPACKDEV_SOURCE_DIR "{1}")
+        '''.format(project, os.getcwd()))
     return f
 
 
-def add_package_to_cmakelists(cmakelists, package, dependencies, build_system):
+def add_package_to_cmakelists(cmakelists, package, dependencies, cmake_args,
+                              build_system):
 
     cmake_wrapper = os.path.join(os.getcwd(), 'spackdev', package, 'bin',
                                  'cmake')
@@ -189,11 +190,13 @@ file(MAKE_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package})
 
 add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
   COMMAND {cmake_wrapper} 
+      {cmake_args}
       -G {cmake_build_label}
       -DCMAKE_INSTALL_PREFIX=${{CMAKE_BINARY_DIR}}/install
       ${{SPACKDEV_SOURCE_DIR}}/{package} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
   WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
 '''.format(package=package, cmake_wrapper=cmake_wrapper,
+           cmake_args=cmake_args,
            cmake_build_label=build_system.cmake_label))
 
     for dependency in dependencies:
@@ -247,7 +250,28 @@ set_source_files_properties(
            build_label=build_system.label))
 
 
-def write_cmakelists(packages, dependencies, build_system):
+def extract_cmake_args(packages, install_args):
+    retval, output = spack_cmd(['install', '--fake', '--only', 'package',
+                                install_args])
+    package_cmake_args = {}
+    for line in output.splitlines():
+        if line.startswith('[cmake-args]'):
+            tag, package, cmake_args = line.split(None, 2)
+            package_cmake_args[package] = cmake_args
+    missing_packages = []
+    for package in packages:
+        if package not in package_cmake_args:
+            missing_packages.append(package)
+    if missing_packages:
+        tty.die('unable to ascertain CMake arguments for packages: {0}'.
+                format(' '.join(missing_packages)))
+
+    retval, output = spack_cmd(['uninstall', '-y', install_args])
+    return package_cmake_args
+
+
+def write_cmakelists(packages, install_args, dependencies, build_system):
+    package_cmake_args = extract_cmake_args(packages, install_args)
     cmakelists = init_cmakelists()
     remaining_packages = copy.copy(packages)
     while remaining_packages != []:
@@ -258,7 +282,9 @@ def write_cmakelists(packages, dependencies, build_system):
                     if dependency in packages:
                         package_dependencies.append(dependency)
                 add_package_to_cmakelists(cmakelists, package,
-                                          package_dependencies, build_system)
+                                          package_dependencies,
+                                          package_cmake_args[package],
+                                          build_system)
                 remaining_packages.remove(package)
 
 
@@ -325,7 +351,7 @@ def create_cmake_wrapper(wrappers_dir, environment, dependencies, dev_packages):
             package_src = os.path.join(os.getcwd(), dep)
             f.write('CMAKE_PREFIX_PATH="' + package_src +
                     ':$CMAKE_PREFIX_PATH"\n')
-    f.write('cmake "$@"\n')
+    f.write('exec cmake "$@"\n')
     f.close()
     os.chmod(filename, 0755)
 
@@ -507,18 +533,20 @@ def format_packages_for_install(packages, all_dependencies):
 
 def write_packages_file(requested, additional, all_dependencies):
     packages_filename = os.path.join('spackdev', 'packages.sd')
+    install_args = ''
     with open(packages_filename, 'w') as f:
         f.write(' '.join(requested) + '\n')
         f.write(' '.join(additional) + '\n')
-        f.write(format_packages_for_install(requested + additional,
-                                            all_dependencies) + '\n')
-
+        install_args = format_packages_for_install(requested + additional,
+                                                   all_dependencies)
+        f.write(install_args + '\n')
+    return install_args
 
 def create_build_area(build_system):
     os.mkdir('build')
     os.chdir('build')
     external_cmd(['cmake', '../spackdev',
-                  '-G{}'.format(build_system.cmake_label)])
+                  '-G {}'.format(build_system.cmake_label)])
 
 
 def setup_parser(subparser):
@@ -556,22 +584,27 @@ def init(parser, args):
         tty.msg('additional inter-dependent packages: ' +
                 ' '.join(additional))
     dev_packages = requested + additional
-    write_packages_file(requested, additional, all_dependencies)
+    install_args = write_packages_file(requested, additional, all_dependencies)
+
+    if not args.no_dependencies:
+        tty.msg('install dependencies')
+        (retval, output) = install_dependencies(dev_packages=dev_packages,
+                                                install_args=install_args)
 
     if args.make:
         build_system = Build_system('make')
     else:
         build_system = Build_system('ninja')
 
-    write_cmakelists(dev_packages, all_dependencies, build_system)
+    tty.msg('generate top level CMakeLists.txt')
+    write_cmakelists(dev_packages, install_args,
+                     all_dependencies, build_system)
 
     tty.msg('creating wrapper scripts')
     pkg_environments = create_environment(dev_packages, all_dependencies)
 
-    if not args.no_dependencies:
-        (retval, output) = install_dependencies()
-
     if not args.no_stage:
+        tty.msg('staging sources for {0}'.format(dev_packages))
         stage_packages(dev_packages)
 
     #create_build_scripts(dev_packages, pkg_environments)
