@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import os.path
+import os
+import shutil
 import sys
 from spack_import import tty
 from misc import external_cmd, spack_cmd, read_packages_file
@@ -26,9 +28,11 @@ def stage_package(package):
         tty.die('stage: directory "{}" exists.'.format(package))
     tty.msg('staging '  + package)
     stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-    retval, output = external_cmd([stage_py_filename])
+    retval, output = spack_cmd(['stage', '-p', '%s/spackdev/.tmp' % os.getcwd(), package])
     if retval != 0:
         tty.die('staging {} failed'.format(package))
+    shutil.move('%s/spackdev/.tmp/%s' % (os.getcwd(), package), '%s/%s' % (os.getcwd(),package))
+    os.remove('%s/spackdev/.tmp' % os.getcwd())
 
 def stage_packages(packages):
     for package in packages:

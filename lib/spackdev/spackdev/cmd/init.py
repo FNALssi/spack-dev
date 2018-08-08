@@ -385,59 +385,6 @@ def create_env_sh(package, environment):
         outfile.write('{0}={1}\n'.format(var, value))
 
 
-def create_stage_script(package):
-    bin_dir = os.path.join('spackdev', package, 'bin')
-    if not os.path.exists(bin_dir):
-        os.makedirs(bin_dir)
-    status, output = spack_cmd(["exportstage", package])
-    output_lines = output.split('\n')
-    # print 'jfa: output_lines =',output_lines
-    # print 'jfa: output_lines[1] =', output_lines[1]
-    method = output_lines[0]
-    dict_str = output_lines[1]
-    stage_py_filename = os.path.join(bin_dir, 'stage.py')
-    stage_py = open(stage_py_filename, 'w')
-    stage_py.write('''#!/usr/bin/env python
-import os
-import subprocess
-import sys
-def stage(package, method, the_dict):
-    if method == 'GitFetchStrategy':
-        cmd = ['git', 'clone']
-        if the_dict['branch']:
-            cmd.extend(['--branch', the_dict['branch']])
-        cmd.extend([the_dict['url'], package])
-        retval = subprocess.call(cmd)
-        if retval != 0:
-            sys.stderr.write('"' + ' '.join(cmd) + '" failed\\n')
-            sys.exit(retval)
-        os.chdir(package)
-        if the_dict['tag']:
-            retval = subprocess.call(['git', 'checkout', the_dict['tag']])
-            if retval != 0:
-                sys.stderr.write('"' + ' '.join(cmd) + '" failed\\n')
-                sys.exit(retval)
-    else:
-        sys.stderr.write('SpackDev stage.py does not yet handle sources of type ' + method)
-        sys.exit(1)
-    ''')
-    stage_py.write('''
-if __name__ == '__main__':
-    package = "''')
-    stage_py.write(package)
-    stage_py.write('''"
-    method = "''')
-    stage_py.write(output_lines[0])
-    stage_py.write('''"
-    the_dict = ''')
-    stage_py.write(dict_str)
-    stage_py.write('''
-    stage(package, method, the_dict)
-    ''')
-    stage_py.close()
-    os.chmod(stage_py_filename, 0755)
-
-
 def create_environment(packages, all_dependencies):
     pkg_environments = {}
     for package in packages:
@@ -450,7 +397,6 @@ def create_environment(packages, all_dependencies):
                         all_dependencies.get_dependencies(package),
                         packages)
         create_env_sh(package, environment)
-        create_stage_script(package)
     return pkg_environments
 
 
