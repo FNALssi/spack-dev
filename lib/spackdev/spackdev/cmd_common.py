@@ -23,16 +23,19 @@ def install_dependencies(**kwargs):
     return retval, output
 
 def stage_package(package):
-    tty.debug('jfa getcwd() = {}'.format(os.getcwd()))
+    cwd = os.getcwd()
+    tty.debug('jfa getcwd() = {}'.format(cwd))
     if os.path.exists(os.path.join('.', package)):
-        tty.die('stage: directory "{}" exists.'.format(package))
+        tty.msg('stage: directory "{}" exists: skipping'.format(package))
+        return
     tty.msg('staging '  + package)
     stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-    retval, output = spack_cmd(['stage', '-p', '%s/spackdev/.tmp' % os.getcwd(), package])
+    stage_tmp = '{0}/spackdev/.tmp'.format(cwd)
+    retval, output = spack_cmd(['stage', '-p', stage_tmp, package])
     if retval != 0:
         tty.die('staging {} failed'.format(package))
-    shutil.move('%s/spackdev/.tmp/%s' % (os.getcwd(), package), '%s/%s' % (os.getcwd(),package))
-    os.remove('%s/spackdev/.tmp' % os.getcwd())
+    shutil.move('{0}/{1}'.format(stage_tmp, package), '{0}/'.format(cwd))
+    os.remove(stage_tmp)
 
 def stage_packages(packages):
     for package in packages:
