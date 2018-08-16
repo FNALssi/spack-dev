@@ -3,12 +3,14 @@ from __future__ import print_function
 
 import argparse
 from spackdev import spack_cmd, external_cmd
-from spackdev import stage_packages, install_dependencies
-from spackdev.spack_import import tty
-from spackdev.spack_import import yaml
+from spackdev import stage_packages, install_dependencies, \
+    environment_from_pickle, sanitized_environment
+from spackdev.spack_import import tty, yaml, \
+    dump_environment, pickle_environment, env_var_to_source_line
 from spackdev import which
 
 # from spackdev.spack import Spec
+import cPickle
 import copy
 import glob
 import os
@@ -64,8 +66,10 @@ class Dependencies:
         return self.all_packages
 
     def package_info(self, package):
-        # Will raise KeyError if package is not found.
-        return self.all_packages[package]
+        try:
+            return self.all_packages[package]
+        except KeyError:
+            tty.die('unable to obtain package information for {0}'.format(package))
 
     def has_dependency(self, package, other_packages):
         for other in other_packages:
@@ -94,6 +98,33 @@ class Build_system:
             tty.die('Build_system: must be either "make" or "ninja"')
 
 
+class PathFixer:
+    """Class to handle the (relatively) efficient replacement of spack stage
+    and install prefixes with their SpackDev equivalents where
+    appropriate.
+    """
+    def __init__(self, spack_install, spack_stage):
+        self.spack_install = spack_install
+        self.spack_stage = spack_stage
+        self.spackdev_install = os.path.join(os.getcwd(), 'build', 'install')
+        self.spackdev_stage = os.path.join(os.getcwd(), 'build')
+
+    def set_packages(self, *args):
+        # Replace all stage and insatll paths for packages we're
+        # developing with their correct locations.
+        raw_matcher = r'(?:(?<=[=\s;:"\'])|^){{path}}/(?:[^;:\"]*?/)*?(?P<pkg>{0})-[^;:"\'/]*{{extra}}'.\
+                     format('|'.join(args))
+        self.install_path_finder\
+            = re.compile(raw_matcher.format(path=self.spack_install, extra=''))
+        self.stage_path_finder\
+            = re.compile(raw_matcher.format(path=self.spack_stage, extra='/spack-build'))
+
+    def fix(self, path):
+        result = self.install_path_finder.sub(os.path.join(self.spackdev_install, r'\g<pkg>'), path)
+        result = self.stage_path_finder.sub(os.path.join(self.spackdev_stage, r'\g<pkg>'), result)
+        return result
+
+
 def extract_stage_dir_from_output(output, package):
     stage_dir = None
     for line in output.split('\n'):
@@ -106,7 +137,7 @@ def extract_stage_dir_from_output(output, package):
         os.rename(real_dir, os.path.join(parent, package))
         shutil.rmtree(stage_dir)
     else:
-        raise RuntimeError("extract_stage_dir_from_output: failed to find stage_dir")
+        tty.die("extract_stage_dir_from_output: failed to find stage_dir")
 
 
 def yaml_to_specs(yaml_text):
@@ -171,116 +202,128 @@ def init_cmakelists(project='spackdev'):
     f = open(os.path.join('spackdev', 'CMakeLists.txt'), 'w')
     f.write(
         '''cmake_minimum_required(VERSION ${{CMAKE_VERSION}})
-        project({0})
-        set(SPACKDEV_SOURCE_DIR "{1}")
-        '''.format(project, os.getcwd()))
+project({0} NONE)
+set(SPACKDEV_SOURCE_DIR "{1}")
+
+include(ExternalProject)
+
+set_property(DIRECTORY PROPERTY EP_STEP_TARGETS
+             configure build install test
+  )
+'''.format(project, os.getcwd()))
     return f
 
 
-def add_package_to_cmakelists(cmakelists, package, dependencies, cmake_args,
-                              build_system):
+gen_arg = re.compile(r'-G(.*)')
+def add_package_to_cmakelists(cmakelists, package, package_dependencies,
+                              cmake_args, build_system):
 
-    cmake_wrapper = os.path.join(os.getcwd(), 'spackdev', package, 'bin',
-                                 'cmake')
+    cmd_wrapper\
+        = lambda x : os.path.join(os.getcwd(), 'spackdev', package, 'bin', x)
+
+    filtered_cmake_args = []
+    cmake_generator = build_system.cmake_label
+
+    gen_next = None
+
+    for arg in cmake_args:
+        if gen_next:
+            gen_next = None
+            cmake_generator = arg
+            continue
+        else:
+            gen_match = gen_arg.match(arg)
+            if gen_match:
+                if gen_match.group(1):
+                    cmake_generator = gen_match.group(1)
+                else:
+                    gen_next = True
+            else:
+                filtered_cmake_args.append(arg)
+
+    cmake_args_string\
+        = ' '.join([ '"{0}"'.format(arg) for arg in filtered_cmake_args])
+
+    cmake_args_string = cmake_args_string.replace(';', '|')
+
     cmakelists.write(
 '''
 # {package}
-file(MAKE_DIRECTORY ${{CMAKE_BINARY_DIR}}/tags/{package})
-file(MAKE_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package})
+file(MAKE_DIRECTORY tmp/{package})
+file(MAKE_DIRECTORY {package})
 
-add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
-  COMMAND {cmake_wrapper} 
-      {cmake_args}
-      -G {cmake_build_label}
-      -DCMAKE_INSTALL_PREFIX=${{CMAKE_BINARY_DIR}}/install
-      ${{SPACKDEV_SOURCE_DIR}}/{package} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
-  WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
-'''.format(package=package, cmake_wrapper=cmake_wrapper,
-           cmake_args=cmake_args,
-           cmake_build_label=build_system.cmake_label))
-
-    for dependency in dependencies:
-        cmakelists.write("  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{dependency}/install\n".
-                         format(dependency=dependency))
-
-    cmakelists.write(
-''')
-
-add_custom_target(tags_{package}_cmake
-  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake)
-
-set_source_files_properties(
-  ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
-  PROPERTIES GENERATED TRUE
-)
-
-add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}
-  COMMAND {build_command} && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}_dummy
-  WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
-  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/cmake
-)
-
-add_custom_target(tags_{package}_{build_label}
-DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label})
-add_dependencies(tags_{package}_{build_label} tags_{package}_cmake)
-
-set_source_files_properties(
-  ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}
-  PROPERTIES GENERATED TRUE
-)
-
-add_custom_command(OUTPUT ${{CMAKE_BINARY_DIR}}/tags/{package}/install
-  COMMAND {build_command} install && touch ${{CMAKE_BINARY_DIR}}/tags/{package}/install_dummy
-  WORKING_DIRECTORY ${{CMAKE_BINARY_DIR}}/{package}
-  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/{build_label}
-)
-
-add_custom_target(tags_{package}_install
-  ALL
-  DEPENDS ${{CMAKE_BINARY_DIR}}/tags/{package}/install)
-
-add_dependencies(tags_{package}_install tags_{package}_{build_label})
-
-set_source_files_properties(
-  ${{CMAKE_BINARY_DIR}}/tags/{package}/install
-  PROPERTIES GENERATED TRUE
-)
-
-'''.format(package=package, build_command=build_system.build_command,
-           build_label=build_system.label))
+ExternalProject_Add({package}
+  TMP_DIR "tmp/{package}"
+  STAMP_DIR "tmp/{package}/stamp"
+  DOWNLOAD_DIR "tmp/{package}"
+  SOURCE_DIR "${{SPACKDEV_SOURCE_DIR}}/{package}"
+  BINARY_DIR "{package}"
+  INSTALL_DIR "install/{package}"
+  CMAKE_COMMAND "{cmake_wrapper}"
+  CMAKE_GENERATOR "{cmake_generator}"
+  CMAKE_ARGS {cmake_args}
+  BUILD_ALWAYS TRUE
+  TEST_EXCLUDE_FROM_MAIN TRUE
+  LIST_SEPARATOR "|"
+  DEPENDS {package_dependency_targets}
+  )
+'''.format(package=package,
+           cmake_wrapper=cmd_wrapper('cmake'),
+           cmake_args=cmake_args_string,
+           cmake_generator=cmake_generator,
+           package_dependency_targets=' '.join(package_dependencies)))
 
 
+cmake_args_start = re.compile(r'\[cmake-args\s+([^\]]+)\]')
+cmake_args_end = re.compile(r'\[/cmake-args\]')
 def extract_cmake_args(packages, install_args):
     retval, output = spack_cmd(['install', '--fake', '--only', 'package',
                                 install_args])
     package_cmake_args = {}
+    current_package = None
+    current_package_args = []
     for line in output.splitlines():
-        if line.startswith('[cmake-args]'):
-            tag, package, cmake_args = line.split(None, 2)
-            package_cmake_args[package] = cmake_args
+        start_match = cmake_args_start.match(line)
+        if start_match:
+            current_package = start_match.group(1)
+        elif current_package:
+            end_match = cmake_args_end.match(line)
+            if end_match:
+                package_cmake_args[current_package] = current_package_args
+                current_package = None
+                current_package_args = []
+            else:
+                current_package_args.append(line)
     missing_packages = []
     for package in packages:
         if package not in package_cmake_args:
             missing_packages.append(package)
+
+    retval, output = spack_cmd(['uninstall', '-y', install_args])
     if missing_packages:
         tty.die('unable to ascertain CMake arguments for packages: {0}'.
                 format(' '.join(missing_packages)))
 
-    retval, output = spack_cmd(['uninstall', '-y', install_args])
     return package_cmake_args
 
 
-def write_cmakelists(packages, install_args, dependencies, build_system):
+def write_cmakelists(packages, install_args, all_dependencies,
+                     build_system, path_fixer):
     package_cmake_args = extract_cmake_args(packages, install_args)
     cmakelists = init_cmakelists()
     remaining_packages = copy.copy(packages)
     while remaining_packages != []:
         for package in remaining_packages:
-            if not dependencies.has_dependency(package, remaining_packages):
+            if not all_dependencies.has_dependency(package, remaining_packages):
                 package_dependencies = []
-                for dependency in dependencies.get_dependencies(package):
+                for dependency in all_dependencies.get_dependencies(package):
                     if dependency in packages:
                         package_dependencies.append(dependency)
+                # Fix install / stage paths.
+                path_fixer.set_packages(package, *package_dependencies)
+                package_cmake_args[package]\
+                    = [path_fixer.fix(val) for val in \
+                       package_cmake_args[package]]
                 add_package_to_cmakelists(cmakelists, package,
                                           package_dependencies,
                                           package_cmake_args[package],
@@ -288,147 +331,9 @@ def write_cmakelists(packages, install_args, dependencies, build_system):
                 remaining_packages.remove(package)
 
 
-def get_environment(package):
-    package_env_file_name = '{0}-environment.txt'.format(package)
-    status, output \
-        = spack_cmd(['env', '--dump', package, package_env_file_name])
-    package_env_file = open(package_env_file_name, 'r')
-    package_env = package_env_file.read()
-    environment = {}
-    # Deal with possibly quoted values.
-    var_regex \
-        = re.compile(r'^export ([A-Za-z_][A-Za-z_0-9()]*)=((?P<sp>\')?.*?(?(sp)\')$)',
-                     re.DOTALL | re.MULTILINE)
-    for match in var_regex.finditer(package_env):
-        if not match.group(1).startswith('BASH_FUNC'):
-            environment[match.group(1)] = match.group(2)
-    return environment
-
-
-def copy_modified_script(source, dest, environment):
-    infile = open(source, 'r')
-    outfile = open(dest, 'w')
-
-    # copy hash bang line
-    line = infile.readline()
-    outfile.write(line)
-
-    # insert select variables
-    outfile.write('# begin SpackDev variables\n')
-    for var, value in sorted(environment.iteritems()):
-        if var in ['CMAKE_PREFIX_PATH', 'PATH']:
-            outfile.write('{0}={1}\n'.format(var,value))
-            outfile.write('export {0}\n'.format(var))
-        s_spack = re.match('^SPACK_.*', var)
-        if s_spack:
-            if var == 'SPACK_PREFIX':
-                spack_prefix = os.path.join(os.getcwd(), 'build', 'install')
-                outfile.write(var + '=' + spack_prefix + '\n')
-            else:
-                outfile.write('{0}={1}\n'.format(var,value))
-            outfile.write('export {0}\n'.format(var))
-    outfile.write('# end SpackDev variables\n')
-
-    # copy the rest
-    for line in infile.readlines():
-        outfile.write(line)
-    outfile.close()
-    os.chmod(dest, 0755)
-
-
-def create_cmake_wrapper(wrappers_dir, environment, dependencies, dev_packages):
-    filename = os.path.join(wrappers_dir, 'cmake')
-    f = open(filename, 'w')
-    f.write('# /bin/sh\n')
-    f.write('\n# begin spack variables\n')
-    for var, value in sorted(environment.iteritems()):
-        f.write('{0}={1}\n'.format(var,value))
-        f.write('export {0}\n'.format(var))
-    f.write('\n# end spack variables\n')
-    f.write('\n')
-    for dep in dependencies:
-        if dep in dev_packages:
-            package_src = os.path.join(os.getcwd(), dep)
-            f.write('CMAKE_PREFIX_PATH="' + package_src +
-                    ':$CMAKE_PREFIX_PATH"\n')
-    f.write('exec cmake "$@"\n')
-    f.close()
-    os.chmod(filename, 0755)
-
-
-def create_wrappers(package, environment, dependencies, dev_packages):
-    # print 'jfa start create_wrappers'
-    wrappers_dir = os.path.join('spackdev', package, 'bin')
-    # wrappers_dir = os.path.join('env', package, 'bin')
-    if not os.path.exists(wrappers_dir):
-        os.makedirs(wrappers_dir)
-    for var, value in sorted(environment.iteritems()):
-        if var in ['CC', 'CXX', 'F77', 'FC']:
-            if value[0] == "'" and value[-1] == "'":
-                # It's been quoted: we need the shell to unquote it.
-                value=subprocess.call("echo {0}".format(value), shell=True)
-            filename = os.path.basename(value)
-            dest = os.path.join(wrappers_dir, filename)
-            environment[var] = os.path.join(os.getcwd(), dest)
-            copy_modified_script(value, dest, environment)
-    create_cmake_wrapper(wrappers_dir, environment, dependencies, dev_packages)
-
-
-def create_env_sh(package, environment):
-    env_dir = os.path.join('spackdev', package, 'env')
-    if not os.path.exists(env_dir):
-        os.makedirs(env_dir)
-    pathname = os.path.join(env_dir, 'env.sh')
-    # pathname = os.path.join('env', package, 'env.sh')
-    outfile = open(pathname, 'w')
-    for var, value in sorted(environment.iteritems()):
-        outfile.write('{0}={1}\n'.format(var, value))
-
-
-def create_environment(packages, all_dependencies):
-    pkg_environments = {}
-    for package in packages:
-        environment = get_environment(package)
-        pkg_environments[package] = environment
-        # print package,':'
-        # for line in environment:
-        #     print line
-        create_wrappers(package, environment,
-                        all_dependencies.get_dependencies(package),
-                        packages)
-        create_env_sh(package, environment)
-    return pkg_environments
-
-
-def extract_build_step_scripts(package, dry_run_filename):
-    # f = open(dry_run_filename, 'r')
-    # lines = f.readlines()
-    # f.close()
-    steps = utils.read_all_csv_lists(dry_run_filename)
-    # print 'jfa: found', len(steps),'build steps'
-    wrappers_dir = os.path.join('spackdev', package, 'bin')
-    # wrappers_dir = os.path.join('env', package, 'bin')
-
-
-def extract_short_spec(package, pkg_environements):
-    retval = None
-    for line in pkg_environements[package]:
-        s = re.match('^SPACK_SHORT_SPEC=(.*)', line)
-        if s:
-            rhs = s.group(1)
-            s2 = re.match('(.*)=', rhs)
-            retval = s2.group(1)
-    return retval
-
-
-def create_build_scripts(packages, pkg_environments):
-    for package in packages:
-        os.chdir(package)
-        short_spec = extract_short_spec(package, pkg_environments)
-        status, output = spack_cmd(["diy", "--dry-run-file", "spackdev.out",
-                                          short_spec])
-        os.chdir("..")
-        extract_build_step_scripts(package, os.path.join(package, "spackdev.out"))
+def spack_stage_top():
+    retval, output = spack_cmd(['location', '-S'])
+    return output
 
 
 def par_val_to_string(par, val):
@@ -474,7 +379,106 @@ def format_packages_for_install(packages, all_dependencies):
               (''.join(install_args_for_package(dep,
                                                 all_dependencies)))
               for dep in all_dependencies.get_all_dependencies(package)])
-    return ' '.join(install_args)
+    return install_args
+
+
+def get_environment(package, all_dependencies):
+    package_env_file_name = '{0}-environment.pickle'.format(package)
+    status, output \
+        = spack_cmd(['env', '--pickle'] +
+                    format_packages_for_install([package], all_dependencies) +
+                    ['--', package_env_file_name])
+    environment = environment_from_pickle(package_env_file_name)
+    os.remove(package_env_file_name)
+    # This needs to be what we want it to be.
+    environment['SPACK_PREFIX'] = os.path.join(os.getcwd(), 'build', 'install')
+    return sanitized_environment(environment, drop_unchanged=True)
+
+
+def copy_modified_script(source, dest, environment):
+    infile = open(source, 'r')
+    outfile = open(dest, 'w')
+
+    # copy hash bang line
+    line = infile.readline()
+    outfile.write(line)
+
+    # insert select variables
+    outfile.write('\n# begin SpackDev variables\n')
+    for var, value in sorted(environment.iteritems()):
+        if var in ['CMAKE_PREFIX_PATH', 'PATH'] or re.match('^SPACK_.*', var):
+            outfile.write('{0}\n'.format(env_var_to_source_line(var, value)))
+    outfile.write('# end SpackDev variables\n\n')
+
+    # copy the rest
+    for line in infile.readlines():
+        outfile.write(line)
+    outfile.close()
+    os.chmod(dest, 0755)
+
+
+def create_compiler_wrappers(wrappers_dir, environment):
+    for var, value in sorted(environment.iteritems()):
+        if var in ['CC', 'CXX', 'F77', 'FC']:
+            if value[0] == "'" and value[-1] == "'":
+                # It's been quoted: we need the shell to unquote it.
+                value=subprocess.call("echo {0}".format(value), shell=True)
+            filename = os.path.basename(value)
+            dest = os.path.join(wrappers_dir, filename)
+            environment[var] = os.path.join(os.getcwd(), dest)
+            copy_modified_script(value, dest, environment)
+
+
+def create_cmd_wrappers(wrappers_dir, environment):
+    for cmd in ['cmake', 'ctest', 'make', 'ninja']:
+        filename = os.path.join(wrappers_dir, cmd) 
+        with open(filename, 'w') as f:
+            f.write('#!/bin/bash\n')
+            f.write('\n# begin spack variables\n')
+            for var, value in sorted(environment.iteritems()):
+                f.write('{0}\n'.format(env_var_to_source_line(var, value)))
+            f.write('# end spack variables\n\n')
+            f.write('exec {0} "$@"\n'.format(cmd))
+        os.chmod(filename, 0755)
+
+
+def create_wrappers(package, environment):
+    # print 'jfa start create_wrappers'
+    wrappers_dir = os.path.join('spackdev', package, 'bin')
+    if not os.path.exists(wrappers_dir):
+        os.makedirs(wrappers_dir)
+    create_compiler_wrappers(wrappers_dir, environment)
+    create_cmd_wrappers(wrappers_dir, environment)
+
+
+def create_env_files(env_dir, environment):
+    if not os.path.exists(env_dir):
+        os.makedirs(env_dir)
+    # Write a human-readable file.
+    with open(os.path.join(env_dir, 'env.txt'), 'w') as outfile:
+        for var, value in sorted(environment.iteritems()):
+            outfile.write('{0}={1}\n'.format(var, value))
+    # Write a source-able file.
+    dump_environment(os.path.join(env_dir, 'env.sh'), environment)
+    # Write a pickled file.
+    pickle_environment(os.path.join(env_dir, 'env.pickle'), environment)
+
+
+def create_environment(packages, all_dependencies):
+    path_fixer = None
+    for package in packages:
+        tty.msg('creating environment for {0}'.format(package))
+        environment = get_environment(package, all_dependencies)
+        if path_fixer is None:
+            path_fixer = PathFixer(environment['SPACK_INSTALL'], spack_stage_top())
+        # Fix paths in environment
+        path_fixer.set_packages(*packages)
+        environment = {var: path_fixer.fix(val) for var, val in
+                       environment.iteritems()}
+        create_wrappers(package, environment)
+        create_env_files(os.path.join('spackdev', package, 'env'), environment)
+    create_env_files('spackdev', sanitized_environment(os.environ))
+    return path_fixer
 
 
 def write_packages_file(requested, additional, all_dependencies):
@@ -483,17 +487,19 @@ def write_packages_file(requested, additional, all_dependencies):
     with open(packages_filename, 'w') as f:
         f.write(' '.join(requested) + '\n')
         f.write(' '.join(additional) + '\n')
-        install_args = format_packages_for_install(requested + additional,
-                                                   all_dependencies)
+        install_args\
+            = ' '.join(format_packages_for_install(requested + additional,
+                                                   all_dependencies))
         f.write(install_args + '\n')
     return install_args
 
 def create_build_area(build_system):
     os.mkdir('build')
     os.chdir('build')
-    external_cmd(['cmake', '../spackdev',
-                  '-G {}'.format(build_system.cmake_label)])
-
+    status, output\
+        = external_cmd(['cmake', '../spackdev',
+                        '-G {}'.format(build_system.cmake_label)])
+    tty.msg(output)
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
@@ -509,10 +515,13 @@ def setup_parser(subparser):
 
 
 def init(parser, args):
-    dir = os.getcwd()
-    if (not os.path.exists(dir)):
-        os.makedirs(dir)
-    os.chdir(dir)
+    spackdev_base = os.getcwd()
+    # Save for posterity
+    os.environ['SPACKDEV_BASE'] = spackdev_base
+    if (not os.path.exists(spackdev_base)):
+        os.makedirs(spackdev_base)
+    os.chdir(spackdev_base)
+
     if (os.path.exists('spackdev')) :
         tty.die('spackdev init: cannot re-init (spackdev directory exists)')
     os.mkdir('spackdev')
@@ -542,17 +551,16 @@ def init(parser, args):
     else:
         build_system = Build_system('ninja')
 
+    tty.msg('create wrapper scripts')
+    path_fixer = create_environment(dev_packages, all_dependencies)
+
     tty.msg('generate top level CMakeLists.txt')
     write_cmakelists(dev_packages, install_args,
-                     all_dependencies, build_system)
-
-    tty.msg('creating wrapper scripts')
-    pkg_environments = create_environment(dev_packages, all_dependencies)
+                     all_dependencies, build_system, path_fixer)
 
     if not args.no_stage:
-        tty.msg('staging sources for {0}'.format(dev_packages))
+        tty.msg('stage sources for {0}'.format(dev_packages))
         stage_packages(dev_packages)
 
-    #create_build_scripts(dev_packages, pkg_environments)
-    tty.msg('creating build area')
+    tty.msg('create and initialize build area')
     create_build_area(build_system)

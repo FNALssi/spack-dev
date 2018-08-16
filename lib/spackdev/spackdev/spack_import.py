@@ -15,8 +15,10 @@ else:
     lib_dir = 'lib3'
 sys.path.append(os.path.join(spack_root, 'lib', 'spack', 'external', 'yaml', lib_dir))
 sys.path.append(os.path.join(spack_root, 'lib', 'spack'))
+from spack.util.environment import dump_environment, pickle_environment, env_var_to_source_line
 import yaml
 import llnl.util.tty as tty
+
 
 tty.set_verbose(True)
 # import spack.spack
