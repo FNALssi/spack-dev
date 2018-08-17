@@ -71,9 +71,12 @@ class Dependencies:
         except KeyError:
             tty.die('unable to obtain package information for {0}'.format(package))
 
-    def has_dependency(self, package, other_packages):
+    def has_dependency(self, package, other_packages, tree=False):
         for other in other_packages:
-            if other in self.get_dependencies(package):
+            deps = self.get_dependencies(package)
+            if (other in deps) or \
+               (tree and any([self.has_dependency(d, other_packages, tree=tree) for
+                              d in deps])):
                 return True
         else:
             return False
@@ -193,7 +196,7 @@ def get_additional(requested, dependencies):
         append_unique([dep for dep in
                        dependencies.get_all_dependencies(package) if
                        dep not in requested and
-                       dependencies.has_dependency(dep, requested)],
+                       dependencies.has_dependency(dep, requested, tree=True)],
                       additional)
     return additional
 
