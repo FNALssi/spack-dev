@@ -338,9 +338,9 @@ def spack_stage_top():
 
 def par_val_to_string(par, val):
     if type(val) == list:
-        retval = ' {0}={1}'.format(par, ' '.join(val)) if val else ''
+        retval = ' {0}={1}'.format(par, ','.join(val)) if val else ''
     elif type(val) == tuple:
-        retval = ' {0}={1}'.format(par, ' '.join(val)) if val else ''
+        retval = ' {0}={1}'.format(par, ','.join(val)) if val else ''
     elif type(val) == bool:
         retval = '+{0}'.format(par) if val else '~{0}'.format(par)
     elif type(val) == None:
