@@ -266,7 +266,6 @@ ExternalProject_Add({package}
   CMAKE_GENERATOR "{cmake_generator}"
   CMAKE_ARGS {cmake_args}
   BUILD_ALWAYS TRUE
-  TEST_EXCLUDE_FROM_MAIN TRUE
   LIST_SEPARATOR "|"
   DEPENDS {package_dependency_targets}
   )
