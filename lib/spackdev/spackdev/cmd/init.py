@@ -309,8 +309,9 @@ def extract_cmake_args(packages, install_args):
     return package_cmake_args
 
 
-def write_cmakelists(packages, install_args, all_dependencies,
-                     build_system, path_fixer):
+def write_cmakelists(packages, all_dependencies, build_system, path_fixer):
+    install_args = ' '.join(format_packages_for_install(packages,
+                                                        all_dependencies))
     package_cmake_args = extract_cmake_args(packages, install_args)
     cmakelists = init_cmakelists()
     remaining_packages = copy.copy(packages)
@@ -369,6 +370,40 @@ def install_args_for_package(package, all_dependencies):
                     other_args
             alist.append(parstring)
     return [package, version, compiler] + bool_args + other_args
+
+
+def format_dependencies_for_install(packages, all_dependencies):
+    """We need to make sure dependencies are installed, while not having
+    Spack install anything that we wish to develop, even as an indirect
+    dependency. To do this we can leverage the fact that we have already
+    identified additional packages for local compilation that are
+    required for consistency. This makes our current problem simpler.
+    """
+
+    install_args = []
+    packages_to_examine = copy.copy(packages)
+    packages_to_install = []
+    i = 0
+    while i < len(packages_to_examine):
+        package = packages_to_examine[i]
+        if package in packages or \
+           all_dependencies.has_dependency(package, packages):
+            # Install only dependencies.
+            packages_to_examine.extend\
+                ([dep for dep in all_dependencies.get_dependencies(package) if
+                  dep not in packages_to_install + packages])
+        else:
+            # Safe to install this one.
+            packages_to_install.append(package)
+            install_args.append(''.join(install_args_for_package\
+                                        (package, all_dependencies)))
+            install_args.extend\
+            (["^{0}".format\
+              (''.join(install_args_for_package(dep,
+                                                all_dependencies)))
+              for dep in all_dependencies.get_all_dependencies(package)])
+        i += 1
+    return install_args
 
 
 def format_packages_for_install(packages, all_dependencies):
@@ -490,8 +525,8 @@ def write_packages_file(requested, additional, all_dependencies):
         f.write(' '.join(requested) + '\n')
         f.write(' '.join(additional) + '\n')
         install_args\
-            = ' '.join(format_packages_for_install(requested + additional,
-                                                   all_dependencies))
+            = ' '.join(format_dependencies_for_install(requested + additional,
+                                                       all_dependencies))
         f.write(install_args + '\n')
     return install_args
 
@@ -557,8 +592,7 @@ def init(parser, args):
     path_fixer = create_environment(dev_packages, all_dependencies)
 
     tty.msg('generate top level CMakeLists.txt')
-    write_cmakelists(dev_packages, install_args,
-                     all_dependencies, build_system, path_fixer)
+    write_cmakelists(dev_packages, all_dependencies, build_system, path_fixer)
 
     if not args.no_stage:
         tty.msg('stage sources for {0}'.format(dev_packages))
