@@ -530,13 +530,15 @@ def write_packages_file(requested, additional, all_dependencies):
         f.write(install_args + '\n')
     return install_args
 
-def create_build_area(build_system):
+
+def create_build_area(build_system, args):
     os.mkdir('build')
     os.chdir('build')
     status, output\
         = external_cmd(['cmake', '../spackdev',
                         '-G {}'.format(build_system.cmake_label)])
-    tty.msg(output)
+    if args.verbose:
+        tty.msg(output)
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
@@ -549,9 +551,14 @@ def setup_parser(subparser):
         help="use make instead of ninja")
     subparser.add_argument('-s', '--no-stage', action='store_true', dest='no_stage',
         help="do not stage packages")
+    subparser.add_argument('-v', '--verbose', action='store_true',
+                           help="provide more helpful output")
 
 
 def init(parser, args):
+    # Verbosity
+    tty.set_verbose(args.verbose)
+
     spackdev_base = os.getcwd()
     # Save for posterity
     os.environ['SPACKDEV_BASE'] = spackdev_base
@@ -582,7 +589,8 @@ def init(parser, args):
         tty.msg('install dependencies')
         (retval, output) = install_dependencies(dev_packages=dev_packages,
                                                 install_args=install_args)
-
+        if (args.verbose):
+            tty.msg(output)
     if args.make:
         build_system = Build_system('make')
     else:
@@ -599,4 +607,4 @@ def init(parser, args):
         stage_packages(dev_packages)
 
     tty.msg('create and initialize build area')
-    create_build_area(build_system)
+    create_build_area(build_system, args)
