@@ -6,7 +6,7 @@ import copy
 import os
 from spackdev import environment_from_pickle, sanitized_environment,\
     bootstrap_environment
-
+from spackdev.spack_import import tty
 
 description = "run a command in the build environment of a spackdev package, or start a shell in same."
 
@@ -15,6 +15,8 @@ def load_environment(package):
     package_env_file_name\
         = os.path.join(os.environ['SPACKDEV_BASE'],
                        'spackdev', package, 'env', 'env.pickle')
+    if not os.path.exists(package_env_file_name):
+        tty.die('unable to find environment for {0}: not a package being developed?'.format(package))
     environment = copy.copy(os.environ)
     environment.update(sanitized_environment
                        (environment_from_pickle(package_env_file_name)))
