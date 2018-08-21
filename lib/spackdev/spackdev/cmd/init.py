@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import argparse
 from spackdev import spack_cmd, external_cmd
-from spackdev import stage_packages, install_dependencies, \
+from spackdev import srcs_topdir, stage_packages, install_dependencies, \
     environment_from_pickle, sanitized_environment
 from spackdev.spack_import import tty, yaml, \
     dump_environment, pickle_environment, env_var_to_source_line
@@ -22,6 +22,7 @@ import sys
 
 
 description = "initialize a spackdev area"
+spackdev_base = os.getcwd()
 
 
 def append_unique(item, the_list):
@@ -109,8 +110,8 @@ class PathFixer:
     def __init__(self, spack_install, spack_stage):
         self.spack_install = spack_install
         self.spack_stage = spack_stage
-        self.spackdev_install = os.path.join(os.getcwd(), 'build', 'install')
-        self.spackdev_stage = os.path.join(os.getcwd(), 'build')
+        self.spackdev_install = os.path.join(spackdev_base, 'build', 'install')
+        self.spackdev_stage = os.path.join(spackdev_base, 'build')
 
     def set_packages(self, *args):
         # Replace all stage and insatll paths for packages we're
@@ -213,7 +214,7 @@ include(ExternalProject)
 set_property(DIRECTORY PROPERTY EP_STEP_TARGETS
              configure build install test
   )
-'''.format(project, os.getcwd()))
+'''.format(project, srcs_topdir()))
     return f
 
 
@@ -222,7 +223,7 @@ def add_package_to_cmakelists(cmakelists, package, package_dependencies,
                               cmake_args, build_system):
 
     cmd_wrapper\
-        = lambda x : os.path.join(os.getcwd(), 'spackdev', package, 'bin', x)
+        = lambda x : os.path.join(spackdev_base, 'spackdev', package, 'bin', x)
 
     filtered_cmake_args = []
     cmake_generator = build_system.cmake_label
@@ -428,7 +429,7 @@ def get_environment(package, all_dependencies):
     environment = environment_from_pickle(package_env_file_name)
     os.remove(package_env_file_name)
     # This needs to be what we want it to be.
-    environment['SPACK_PREFIX'] = os.path.join(os.getcwd(), 'build', 'install')
+    environment['SPACK_PREFIX'] = os.path.join(spackdev_base, 'build', 'install')
     return sanitized_environment(environment, drop_unchanged=True)
 
 
@@ -462,7 +463,8 @@ def create_compiler_wrappers(wrappers_dir, environment):
                 value=subprocess.call("echo {0}".format(value), shell=True)
             filename = os.path.basename(value)
             dest = os.path.join(wrappers_dir, filename)
-            environment[var] = os.path.join(os.getcwd(), dest)
+            environment[var]\
+                = os.path.join(spackdev_base, dest)
             copy_modified_script(value, dest, environment)
 
 
@@ -559,7 +561,6 @@ def init(parser, args):
     # Verbosity
     tty.set_verbose(args.verbose)
 
-    spackdev_base = os.getcwd()
     # Save for posterity
     os.environ['SPACKDEV_BASE'] = spackdev_base
     if (not os.path.exists(spackdev_base)):

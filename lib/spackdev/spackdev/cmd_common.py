@@ -13,6 +13,16 @@ except ImportError:
     from shlex import quote as cmd_quote
 
 
+def bootstrap_environment():
+    if 'SPACKDEV_BASE' not in os.environ:
+        env_file_name = os.path.join('spackdev', 'env.pickle')
+        if os.path.exists(env_file_name):
+            os.environ.update(sanitized_environment
+                              (environment_from_pickle(env_file_name)))
+        else:
+            tty.die('unable to find spackdev area: please source spackdev/env.sh or execute from spackdev/../')
+
+
 def install_dependencies(**kwargs):
     if 'install_args' in kwargs:
         install_args = kwargs['install_args']
@@ -30,19 +40,26 @@ def install_dependencies(**kwargs):
     return retval, output
 
 
+def srcs_topdir():
+    bootstrap_environment()
+    result = os.path.join(os.environ['SPACKDEV_BASE'], 'srcs')
+    return result
+
+
 def stage_package(package):
-    cwd = os.getcwd()
-    tty.debug('jfa getcwd() = {}'.format(cwd))
-    if os.path.exists(os.path.join('.', package)):
+    topdir = srcs_topdir()
+    if not os.path.exists(topdir):
+        os.mkdir(topdir)
+    if os.path.exists(os.path.join(topdir, package)):
         tty.msg('stage: directory "{}" exists: skipping'.format(package))
         return
     tty.msg('staging '  + package)
     stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-    stage_tmp = '{0}/spackdev/.tmp'.format(cwd)
+    stage_tmp = '{0}/spackdev/.tmp'.format(os.environ['SPACKDEV_BASE'])
     retval, output = spack_cmd(['stage', '-p', stage_tmp, package])
     if retval != 0:
         tty.die('staging {} failed'.format(package))
-    shutil.move('{0}/{1}'.format(stage_tmp, package), '{0}/'.format(cwd))
+    shutil.move('{0}/{1}'.format(stage_tmp, package), '{0}/'.format(topdir))
     os.remove(stage_tmp)
 
 
@@ -79,13 +96,3 @@ def sanitized_environment(environment, drop_unchanged=False):
             (var_blacklist.match(var) or
              (drop_unchanged and var in os.environ and
               val == cmd_quote(os.environ[var])))}
-
-
-def bootstrap_environment():
-    if 'SPACKDEV_BASE' not in os.environ:
-        env_file_name = os.path.join('spackdev', 'env.pickle')
-        if os.path.exists(env_file_name):
-            os.environ.update(sanitized_environment
-                              (environment_from_pickle(env_file_name)))
-        else:
-            raise RuntimeError('Unable to find spackdev area: please source spackdev/env.sh')
