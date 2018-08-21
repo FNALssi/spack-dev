@@ -571,6 +571,10 @@ def init(parser, args):
     dev_packages = requested + additional
     install_args = write_packages_file(requested, additional, all_dependencies)
 
+    if not args.no_stage:
+        tty.msg('stage sources for {0}'.format(dev_packages))
+        stage_packages(dev_packages)
+
     if not args.no_dependencies:
         tty.msg('install dependencies')
         (retval, output) = install_dependencies(dev_packages=dev_packages,
@@ -587,10 +591,6 @@ def init(parser, args):
 
     tty.msg('generate top level CMakeLists.txt')
     write_cmakelists(dev_packages, all_dependencies, build_system, path_fixer)
-
-    if not args.no_stage:
-        tty.msg('stage sources for {0}'.format(dev_packages))
-        stage_packages(dev_packages)
 
     tty.msg('create and initialize build area')
     create_build_area(build_system, args)
