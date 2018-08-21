@@ -129,21 +129,6 @@ class PathFixer:
         return result
 
 
-def extract_stage_dir_from_output(output, package):
-    stage_dir = None
-    for line in output.split('\n'):
-        s = re.search('.*stage.*in (.*)', line)
-        if s:
-            stage_dir = s.group(1)
-    if stage_dir:
-        real_dir = glob.glob(os.path.join(stage_dir, '*'))[0]
-        parent = os.path.dirname(stage_dir)
-        os.rename(real_dir, os.path.join(parent, package))
-        shutil.rmtree(stage_dir)
-    else:
-        tty.die("extract_stage_dir_from_output: failed to find stage_dir")
-
-
 def yaml_to_specs(yaml_text):
     documents = []
     document = ''
