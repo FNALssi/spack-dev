@@ -8,6 +8,10 @@ from spackdev import srcs_topdir, stage_packages, install_dependencies, \
 from spackdev.spack_import import tty, yaml, \
     dump_environment, pickle_environment, env_var_to_source_line
 from spackdev import which
+try:
+    from pipes import quote as cmd_quote
+except ImportError:
+    from shlex import quote as cmd_quote
 
 # from spackdev.spack import Spec
 import cPickle
@@ -83,13 +87,16 @@ class Dependencies:
             return False
 
 
+generator_extractor = re.compile(r'(?:.*?-\s+)?(Ninja|Unix Makefiles)')
 class Build_system:
-    def __init__(self, system_type):
-        self.label = system_type
-        if system_type == 'make':
-            self.build_command = 'make'
-            self.cmake_label = '"Unix Makefiles"'
-        elif system_type == 'ninja':
+    def __init__(self, generator, override=False):
+        primary_generator = generator_extractor.match(generator)
+        if not primary_generator:
+            tty.die('''Build_system: invalid generator {0}--primary generator must be
+           either "Unix Makefiles" or "Ninja"'''.format(generator))
+        self.cmake_generator = generator
+        self.label = 'ninja' if primary_generator.group(1) == 'Ninja' else 'make'
+        if self.label == 'ninja':
             if which('ninja'):
                 self.build_command = 'ninja'
             elif which('ninja-build'):
@@ -97,10 +104,7 @@ class Build_system:
             else:
                 tty.msg('warning: ninja build selected, but neither "ninja" nor "ninja-build" are available')
                 self.build_command = 'ninja'
-            self.cmake_label = 'Ninja'
-        else:
-            tty.die('Build_system: must be either "make" or "ninja"')
-
+        self.override = override
 
 class PathFixer:
     """Class to handle the (relatively) efficient replacement of spack stage
@@ -211,14 +215,18 @@ def add_package_to_cmakelists(cmakelists, package, package_dependencies,
         = lambda x : os.path.join(spackdev_base, 'spackdev', package, 'bin', x)
 
     filtered_cmake_args = []
-    cmake_generator = build_system.cmake_label
-
+    cmake_generator = build_system.cmake_generator
+    generator_label = build_system.label
+    generator_cmd = build_system.build_command
+    generator_override = build_system.override
     gen_next = None
 
     for arg in cmake_args:
         if gen_next:
             gen_next = None
-            cmake_generator = arg
+            if not generator_override:
+                # Use the package's selection for the generator.
+                cmake_generator = arg
             continue
         else:
             gen_match = gen_arg.match(arg)
@@ -251,6 +259,7 @@ ExternalProject_Add({package}
   CMAKE_COMMAND "{cmake_wrapper}"
   CMAKE_GENERATOR "{cmake_generator}"
   CMAKE_ARGS {cmake_args}
+  BUILD_COMMAND {build_command}
   BUILD_ALWAYS TRUE
   LIST_SEPARATOR "|"
   DEPENDS {package_dependency_targets}
@@ -259,8 +268,11 @@ ExternalProject_Add({package}
            cmake_wrapper=cmd_wrapper('cmake'),
            cmake_args=cmake_args_string,
            cmake_generator=cmake_generator,
+           build_command='"{0}"'.format(cmd_wrapper(generator_cmd)) if
+           generator_label == 'ninja' else
+           '"env" "MAKE={make_wrapper}" "$(MAKE)"'.
+           format(make_wrapper=cmd_wrapper('make')),
            package_dependency_targets=' '.join(package_dependencies)))
-
 
 cmake_args_start = re.compile(r'\[cmake-args\s+([^\]]+)\]')
 cmake_args_end = re.compile(r'\[/cmake-args\]')
@@ -521,11 +533,28 @@ def write_packages_file(requested, additional, all_dependencies):
 def create_build_area(build_system, args):
     os.mkdir('build')
     os.chdir('build')
-    status, output\
-        = external_cmd(['cmake', '../spackdev',
-                        '-G {}'.format(build_system.cmake_label)])
+    cmd = ['cmake', '../spackdev',
+           '-G {}'.format(cmd_quote(build_system.cmake_generator))]
+    status, output = external_cmd(cmd, ignore_errors=True)
+    if status != 0:
+        tty.msg(output)
+        tty.error('''The SpackDev area has been initialized, but the initial
+CMake command returned with status {status}. Please check output above for
+details and run:
+  . {env}
+  cd {build_dir}
+  {cmd}
+when you have addressed any problems.'''.
+                  format(status=status,
+                         env=os.path.join(os.environ['SPACKDEV_BASE'],
+                                          'spackdev', 'env.sh'),
+                         build_dir=os.path.join(os.environ['SPACKDEV_BASE'],
+                                                'build'),
+                         cmd=cmd))
+        sys.exit(status)
     if args.verbose:
         tty.msg(output)
+
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
@@ -534,10 +563,30 @@ def setup_parser(subparser):
                            help='packages and dependencies should be inferred from the DAG specified in this text file (in "spack install" format)')
     subparser.add_argument('-d', '--no-dependencies', action='store_true', dest='no_dependencies',
                            help="do not have spack install dependent packages")
-    subparser.add_argument('-m', '--make', action='store_true', dest='make',
-        help="use make instead of ninja")
-    subparser.add_argument('-s', '--no-stage', action='store_true', dest='no_stage',
-        help="do not stage packages")
+    gengroup\
+        = subparser.add_argument_group\
+        ('generator control',
+         '''Control the generator used by the top-level CMake invocation, and
+optionally override generator choices for CMake packages under development.''')
+    mgroup = gengroup.add_mutually_exclusive_group()
+    mgroup.add_argument('-m', '--make', action='store_const',
+                        dest='generator', const='Unix Makefiles',
+                        help="use make instead of ninja")
+    mgroup.add_argument('-n', '--ninja', action='store_const',
+                        dest='generator', const='Ninja',
+                        help="use ninja instead of make")
+    mgroup.add_argument('-G','--generator', default='Unix Makefiles',
+                        help="Specify the generator to use explicitly")
+    gengroup.add_argument('--override-generator', action='store_true',
+                          default=False,
+                          help="""Override CMake generator choice for packages under development.
+
+Packages supporting the SPACKDEV_GENERATOR environment variable will
+automatically use the selected generator regardless of this setting.""")
+
+    subparser.add_argument('-s', '--no-stage', action='store_true',
+                           dest='no_stage',
+                           help="do not stage packages")
     subparser.add_argument('-v', '--verbose', action='store_true',
                            help="provide more helpful output")
 
@@ -552,12 +601,15 @@ def init(parser, args):
         os.makedirs(spackdev_base)
     os.chdir(spackdev_base)
 
+    requested = args.packages
+    dag_filename = args.dag_file
+    build_system = Build_system(args.generator, args.override_generator)
+    os.environ['SPACKDEV_GENERATOR'] = build_system.cmake_generator
+
     if (os.path.exists('spackdev')) :
         tty.die('spackdev init: cannot re-init (spackdev directory exists)')
     os.mkdir('spackdev')
 
-    requested = args.packages
-    dag_filename = args.dag_file
     tty.msg('requested packages: {0}{1}'.\
             format(', '.join(requested),
                    ' from DAG as specified in {0}'.format(dag_filename)
@@ -581,10 +633,6 @@ def init(parser, args):
                                                 install_args=install_args)
         if (args.verbose):
             tty.msg(output)
-    if args.make:
-        build_system = Build_system('make')
-    else:
-        build_system = Build_system('ninja')
 
     tty.msg('create wrapper scripts')
     path_fixer = create_environment(dev_packages, all_dependencies)
