@@ -4,6 +4,8 @@ from __future__ import print_function
 import argparse
 import copy
 import os
+import re
+import tempfile
 from spackdev import environment_from_pickle, sanitized_environment,\
     bootstrap_environment
 from spackdev.spack_import import tty
@@ -24,10 +26,16 @@ def load_environment(package):
 
 
 prompt_splitter = re.compile(r'(.*?)([#\$]\s*)?$')
-def process_rc_options(args_cli):
-    if args_cli.cd:
-        os.chdir(os.path.join(os.environ['SPACKDEV_BASE'],
-                              'build', args_cli.package))
+def update_prompt(args_cli):
+    tty.msg('Setting prompt')
+    tfile = tempfile.NamedTemporaryFile(mode='w', delete=False)
+    tfile.write(r'''if [ -r ~/.bashrc ]; then . ~/.bashrc; fi
+  if [[ "${{PS1}}" =~ ^(.*)([\#\$%][ 	]*)$ ]]; then
+  PS1="${{BASH_REMATCH[1]}}\[\e[1;95m\]{package}\[\e[m\] ${{BASH_REMATCH[2]}}"
+  fi
+rm -f "{tfile_name}"
+'''.format(package=args_cli.package, tfile_name=tfile.name))
+    args_cli.cmd.extend(['--rcfile', tfile.name])
 
 
 def setup_parser(subparser):
@@ -37,6 +45,8 @@ def setup_parser(subparser):
                            help='Command and arguments to execute (default is to start a shell)')
     subparser.add_argument('--cd', action='store_true', default=False,
                            help='Execute the command in the build directory for the specified package')
+    subparser.add_argument('--prompt', action='store_true', default=False,
+                           help='Show the package whose environment is current at the command prompt of interactive shells (BASH only).')
 
 
 def env(parser, args):
@@ -46,8 +56,18 @@ def env(parser, args):
         if not shell:
             shell = os.environ['SHELL']
         args.cmd = [ shell ]
+        if args.prompt:
+            if shell.endswith('bash'):
+                update_prompt(args)
+            else:
+                tty.warn('--prompt is only honored for BASH at this time')
+    elif args.prompt:
+        tty.warn('--prompt ignored when cmd is specified')
+
     environment = load_environment(args.package)
-    process_rc_options(args)
-    tty.msg('executing {0} in environment for package {1}'.
-            format(' '.join(args.cmd), args.package))
+    if args.cd:
+        os.chdir(os.path.join(os.environ['SPACKDEV_BASE'],
+                              'build', args.package))
+    tty.msg('executing {0} in environment for package {1} in directory {2}'.
+            format(' '.join(args.cmd), args.package, os.getcwd()))
     os.execvpe(args.cmd[0], args.cmd, environment)
