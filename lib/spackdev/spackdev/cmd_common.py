@@ -87,7 +87,7 @@ def environment_from_string(env_string):
 
 # Variable blacklist.
 var_blacklist\
-    = re.compile(r'(?:.*AUTH.*|.*SESSION.*|DISPLAY$|HOME$|KONSOLE_|PROMPT_COMMAND$|O?PWD$|SHLVL$|SSH_|TERM$|USER$|WINDOWID$|XDG_|_$)')
+    = re.compile(r'(?:.*AUTH.*|.*SESSION.*|DISPLAY$|HOME$|KONSOLE_|PROMPT_COMMAND$|PS\d|(?:OLD)?PWD$|SHLVL$|SSH_|TERM$|USER$|WINDOWID$|XDG_|_$)')
 # Variable whitelist.
 var_whitelist = re.compile(r'SPACK(?:DEV)?_')
 def sanitized_environment(environment, drop_unchanged=False):
