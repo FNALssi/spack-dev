@@ -12,7 +12,7 @@ if sys.version_info[0] > 2 and sys.version_info[1] > 2:
 else:
     from distutils import spawn
 
-def spack_cmd(args):
+def spack_cmd(args, **kwargs):
     argstr = ' '.join(args)
     cmd = "spack " + argstr
     # print "jfa spack_cmd = '{}'".format(cmd)
@@ -20,20 +20,21 @@ def spack_cmd(args):
     status, output = getstatusoutput(cmd)
     t1 = time.time()
     tty.verbose('spack_cmd: {} {}s'.format(args[0], t1 - t0))
-    if status != 0:
+    if status != 0 and not \
+       ('ignore_errors' in kwargs and kwargs['ignore_errors']):
         tty.error('spack command output:\n' + output)
         tty.die('spack command "{}" failed with return value {}'\
                 .format(cmd, status))
-    # print 'spack_cmd:', args[0], t1 - t0, 's'
     return status, output
 
-def external_cmd(args):
+def external_cmd(args, **kwargs):
     cmd = ' '.join(args)
     status, output = getstatusoutput(cmd)
-    if status != 0:
-        sys.stderr.write('command "{}" failed\n'.format(cmd))
-        sys.stderr.write('output:\n')
-        sys.stderr.write(output + '\n')
+    if status != 0 and not \
+       ('ignore_errors' in kwargs and kwargs['ignore_errors']):
+        tty.error('command output:\n' + output)
+        tty.die('command "{}" failed with return value {}'\
+                .format(cmd, status))
     return status, output
 
 def read_packages_file():
