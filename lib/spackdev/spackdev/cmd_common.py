@@ -30,9 +30,12 @@ def install_dependencies(**kwargs):
     tty.msg('requesting spack install of dependencies for: {0}'
             .format(' '.join(dev_packages)))
     excludes = ','.join(dev_packages)
-    retval, output = spack_cmd(['install',
+    if len(install_args) >0:
+        retval, output = spack_cmd(['install',
 #                                '--implicit',
                                 install_args])
+    else: 
+        retval, output = spack_cmd(['info',' '.join(dev_packages)])
     return retval, output
 
 
@@ -76,8 +79,8 @@ var_finder\
     = re.compile(r'^(?:export\s+)?(?P<var>[A-Za-z_][A-Za-z_0-9()]*)=(?P<val>(?P<sp>\')?.*?(?(sp)\')(?:;\s+export\s+\1;?)?$)',
                  re.DOTALL | re.MULTILINE)
 def environment_from_string(env_string):
-    environment = {match.group('var'): match.group('val') for
-                   match in var_finder.finditer(package_env)}
+    environment=dict((match.group('var'), match.group('val')) for
+                     match in var_finder.finditer(package_env))
     return environment
 
 
@@ -87,8 +90,7 @@ var_blacklist\
 # Variable whitelist.
 var_whitelist = re.compile(r'SPACK(?:DEV)?_')
 def sanitized_environment(environment, drop_unchanged=False):
-    return {var: val for (var, val) in environment.iteritems()
-            if var_whitelist.match(var) or not
+    return dict((var, val) for (var, val) in environment.iteritems() if var_whitelist.match(var) or not
             (var_blacklist.match(var) or
              (drop_unchanged and var in os.environ and
-              val == cmd_quote(os.environ[var])))}
+              val == cmd_quote(os.environ[var]))))

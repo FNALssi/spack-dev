@@ -44,8 +44,8 @@ class Dependencies:
             append_unique(dependencies.keys(), self.deps[package])
         self.all_packages[package] = spec
         self.all_packages.update\
-            ({key: val for (key, val) in dependencies.iteritems() if not
-              self.all_packages.has_key(key)})
+            (dict((key, val) for (key, val) in dependencies.iteritems() if not
+              self.all_packages.has_key(key)))
 
     def get_dependencies(self, package):
         if self.deps.has_key(package):
@@ -144,7 +144,7 @@ def yaml_to_specs(yaml_text):
     specs = {}
     for spec in super_specs:
         for sub_spec in spec['spec']:
-            specs.update({key: value for (key, value) in sub_spec.iteritems() if key not in specs})
+            specs.update(dict((key, value) for (key, value) in sub_spec.iteritems() if key not in specs))
     return specs
 
 
@@ -168,7 +168,7 @@ def calculate_dependencies(specs):
         if specs[name].has_key('dependencies'):
             spec_deps = specs[name]['dependencies']
             package_dependencies \
-                = {d: spec_deps[d] for d in spec_deps.keys()}
+                = dict((d, spec_deps[d]) for d in spec_deps.keys())
         else:
             package_dependencies = {}
         dependencies.add(name, specs[name], package_dependencies)
@@ -504,8 +504,8 @@ def create_environment(packages, all_dependencies):
             path_fixer = PathFixer(environment['SPACK_INSTALL'], spack_stage_top())
         # Fix paths in environment
         path_fixer.set_packages(*packages)
-        environment = {var: path_fixer.fix(val) for var, val in
-                       environment.iteritems()}
+        environment = dict((var, path_fixer.fix(val)) for var, val in
+                       environment.iteritems())
         create_wrappers(package, environment)
         create_env_files(os.path.join('spackdev', package, 'env'), environment)
     create_env_files('spackdev', sanitized_environment(os.environ))
@@ -572,6 +572,7 @@ optionally override generator choices for CMake packages under development.''')
                         help="use ninja instead of make")
     mgroup.add_argument('-G','--generator', default='Unix Makefiles',
                         help="Specify the generator to use explicitly")
+    mgroup.set_defaults(generator='Unix Makefiles')
     gengroup.add_argument('--override-generator', action='store_true',
                           default=False,
                           help="""Override CMake generator choice for packages under development.

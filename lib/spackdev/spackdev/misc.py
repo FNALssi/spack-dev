@@ -19,11 +19,11 @@ def spack_cmd(args, **kwargs):
     t0 = time.time()
     status, output = getstatusoutput(cmd)
     t1 = time.time()
-    tty.verbose('spack_cmd: {} {}s'.format(args[0], t1 - t0))
+    tty.verbose('spack_cmd: {0} {1}s'.format(args[0], str(t1 - t0)))
     if status != 0 and not \
        ('ignore_errors' in kwargs and kwargs['ignore_errors']):
         tty.error('spack command output:\n' + output)
-        tty.die('spack command "{}" failed with return value {}'\
+        tty.die('spack command "{0}" failed with return value {1}'\
                 .format(cmd, status))
     return status, output
 
@@ -33,7 +33,7 @@ def external_cmd(args, **kwargs):
     if status != 0 and not \
        ('ignore_errors' in kwargs and kwargs['ignore_errors']):
         tty.error('command output:\n' + output)
-        tty.die('command "{}" failed with return value {}'\
+        tty.die('command "{0}" failed with return value {1}'\
                 .format(cmd, status))
     return status, output
 
