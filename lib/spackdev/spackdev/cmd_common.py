@@ -34,9 +34,12 @@ def install_dependencies(**kwargs):
     tty.msg('requesting spack install of dependencies for: {0}'
             .format(' '.join(dev_packages)))
     excludes = ','.join(dev_packages)
-    retval, output = spack_cmd(['install',
+    if len(install_args) >0:
+        retval, output = spack_cmd(['install',
 #                                '--implicit',
                                 install_args])
+    else: 
+        retval, output = spack_cmd(['info',' '.join(dev_packages)])
     return retval, output
 
 
