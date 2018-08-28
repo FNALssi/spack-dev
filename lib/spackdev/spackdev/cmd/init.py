@@ -92,6 +92,7 @@ class Build_system:
            either "Unix Makefiles" or "Ninja"'''.format(generator))
         self.cmake_generator = generator
         self.label = 'ninja' if primary_generator.group(1) == 'Ninja' else 'make'
+        self.build_command = self.label # default
         if self.label == 'ninja':
             if which('ninja'):
                 self.build_command = 'ninja'
@@ -99,7 +100,6 @@ class Build_system:
                 self.build_command = 'ninja-build'
             else:
                 tty.msg('warning: ninja build selected, but neither "ninja" nor "ninja-build" are available')
-                self.build_command = 'ninja'
         self.override = override
 
 class PathFixer:
