@@ -37,7 +37,7 @@ class Packages_yaml:
             end_found = False
             for line in f.readlines():
                 if line[:self.delim_len] == self.delimiter:
-                    # print('jfa: findext line: "{}"'.format(line.rstrip()))
+                    # print('jfa: findext line: "{0}"'.format(line.rstrip()))
                     rest = line[self.delim_len:].rstrip()
                     if rest == self.begin:
                         # print('jfa: begin found')
@@ -57,7 +57,7 @@ class Packages_yaml:
     def write_file(self, external_packages):
         if os.path.exists(self.filename):
             backup_filename = self.filename + '.findext'
-            # print('jfa: copy {} {}'.format(self.filename, backup_filename))
+            # print('jfa: copy {0} {1}'.format(self.filename, backup_filename))
             shutil.copy(self.filename, backup_filename)
         dirname = os.path.dirname(self.filename)
         if not os.path.exists(dirname):

@@ -66,7 +66,7 @@ def compile_test_program(lines, compiler, include_flags, link_flags,
     status_write(
         "-----------------end-----------------"
         + "\n", verbose)
-    command = compiler + ' {} tmp.cc -o a.out {}'.format(include_flags,
+    command = compiler + ' {0} tmp.cc -o a.out {1}'.format(include_flags,
                                                          link_flags)
     status_write(
         "debug_config: " + command
@@ -97,7 +97,7 @@ def find_library_version(library, headers,
     lines.append('#include <iostream>\n\n')
     lines.append('int main()\n{\n')
     if define:
-        lines.append('    std::cout << {} << std::endl;\n'.format(define))
+        lines.append('    std::cout << {0} << std::endl;\n'.format(define))
     else:
         lines.append('    std::cout << "success!\n" << std::endl;')
     lines.append('    return 0;\n')
@@ -113,7 +113,7 @@ def find_library_version(library, headers,
         include_lines = []
         for header in headers_list:
             full_path = os.path.join(prefix, 'include', header)
-            include_lines.append('#include "{}"\n'.format(full_path))
+            include_lines.append('#include "{0}"\n'.format(full_path))
         if compile_test_program(include_lines + lines, compiler, include_flags,
                                 link_flags):
             good_prefix = prefix
