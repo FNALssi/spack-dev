@@ -1,16 +1,12 @@
 #!/usr/bin/env python
 
-import cPickle
 import os
 import re
 import shutil
 import sys
 from spack_import import tty
 from misc import spack_cmd, read_packages_file
-try:
-    from pipes import quote as cmd_quote
-except ImportError:
-    from shlex import quote as cmd_quote
+from six.moves import shlex_quote as cmd_quote, cPickle.
 
 
 def bootstrap_environment():
