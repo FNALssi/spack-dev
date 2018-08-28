@@ -570,7 +570,7 @@ optionally override generator choices for CMake packages under development.''')
     mgroup.add_argument('-n', '--ninja', action='store_const',
                         dest='generator', const='Ninja',
                         help="use ninja instead of make")
-    mgroup.add_argument('-G','--generator', default='Unix Makefiles',
+    mgroup.add_argument('-G', '--generator', dest='generator',
                         help="Specify the generator to use explicitly")
     mgroup.set_defaults(generator='Unix Makefiles')
     gengroup.add_argument('--override-generator', action='store_true',
