@@ -8,7 +8,8 @@ from spackdev import srcs_topdir, stage_packages, install_dependencies, \
 from spackdev.spack_import import tty, yaml, \
     dump_environment, pickle_environment, env_var_to_source_line
 from spackdev import which
-from six.moves import shlex_quote as cmd_quote, cPickle
+from six.moves import shlex_quote as cmd_quote
+from six.moves import cPickle
 
 import copy
 import glob
