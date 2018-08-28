@@ -529,7 +529,7 @@ def create_build_area(build_system, args):
     os.mkdir('build')
     os.chdir('build')
     cmd = ['cmake', '../spackdev',
-           '-G {}'.format(cmd_quote(build_system.cmake_generator))]
+           '-G {0}'.format(cmd_quote(build_system.cmake_generator))]
     status, output = external_cmd(cmd, ignore_errors=True)
     if status != 0:
         tty.msg(output)
