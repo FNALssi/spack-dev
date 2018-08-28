@@ -7,7 +7,7 @@ import sys
 from spack_import import tty
 from misc import spack_cmd, read_packages_file
 from six.moves import shlex_quote as cmd_quote
-from six.moves import cPickle.
+from six.moves import cPickle
 
 
 def bootstrap_environment():
