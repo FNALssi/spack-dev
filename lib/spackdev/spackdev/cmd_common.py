@@ -51,14 +51,14 @@ def stage_package(package):
     if not os.path.exists(topdir):
         os.mkdir(topdir)
     if os.path.exists(os.path.join(topdir, package)):
-        tty.msg('stage: directory "{}" exists: skipping'.format(package))
+        tty.msg('stage: directory "{0}" exists: skipping'.format(package))
         return
     tty.msg('staging '  + package)
     stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
     stage_tmp = '{0}/spackdev/.tmp'.format(os.environ['SPACKDEV_BASE'])
     retval, output = spack_cmd(['stage', '-p', stage_tmp, package])
     if retval != 0:
-        tty.die('staging {} failed'.format(package))
+        tty.die('staging {0} failed'.format(package))
     shutil.move('{0}/{1}'.format(stage_tmp, package), '{0}/'.format(topdir))
     os.remove(stage_tmp)
 

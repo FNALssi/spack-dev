@@ -14,7 +14,7 @@ def setup_parser(subparser):
 def validate_args(packages, all_packages):
     for package in packages:
         if not package in all_packages:
-            tty.die("stage: '{}' is not in the list of SpackDev area packages ({})"
+            tty.die("stage: '{0}' is not in the list of SpackDev area packages ({1})"
                     .format(package, all_packages))
 
 def stage(parser, args):

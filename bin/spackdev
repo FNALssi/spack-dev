@@ -3,10 +3,10 @@
 import sys
 import os
 
-# Currently we require Python 2.7.
-if sys.version_info[:2] < (2, 7):
+# Currently we require Python 2.6.
+if sys.version_info[:2] < (2, 6):
     v_info = sys.version_info[:3]
-    sys.exit("SpackDev requires version 2.7 or higher."
+    sys.exit("SpackDev requires version 2.6 or higher."
              "This is Python %d.%d.%d." % v_info)
 
 # Make sure we see all the same things Spack sees:

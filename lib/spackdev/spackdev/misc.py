@@ -15,7 +15,7 @@ else:
 def spack_cmd(args, **kwargs):
     argstr = ' '.join(args)
     cmd = "spack " + argstr
-    # print "jfa spack_cmd = '{}'".format(cmd)
+    # print "jfa spack_cmd = '{0}'".format(cmd)
     t0 = time.time()
     status, output = getstatusoutput(cmd)
     t1 = time.time()

@@ -66,9 +66,9 @@ class External_repo:
 
         if not os.path.isfile(path_name):
             sys.stderr.write(
-                'External_repo.get_pkg_class: could not find "{}"\n'.format(
+                'External_repo.get_pkg_class: could not find "{0}"\n'.format(
                     path_name))
-        module_name = 'spackdev.external_repo.{}'.format(pkg_name)
+        module_name = 'spackdev.external_repo.{0}'.format(pkg_name)
         module = imp.load_source(module_name, path_name)
         module.__package__ = 'spackdev.external_repo'
         class_name = mod_to_class(pkg_name)
