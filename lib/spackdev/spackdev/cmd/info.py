@@ -28,7 +28,7 @@ def info(parser, args):
         sys.stderr.write('spack info: no such pathname "' + dir + '"\n')
         sys.exit(1)
     os.chdir(dir)
-    if (not os.path.exists('spackdev')) :
+    if (not os.path.exists('spackdev-aux')) :
         sys.stderr.write('spackdev info: ' + dir + ' is not a SpackDev area\n')
         sys.exit(1)
 

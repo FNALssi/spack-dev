@@ -12,12 +12,12 @@ from six.moves import cPickle
 
 def bootstrap_environment():
     if 'SPACKDEV_BASE' not in os.environ:
-        env_file_name = os.path.join('spackdev', 'env.pickle')
+        env_file_name = os.path.join('spackdev-aux', 'env.pickle')
         if os.path.exists(env_file_name):
             os.environ.update(sanitized_environment
                               (environment_from_pickle(env_file_name)))
         else:
-            tty.die('unable to find spackdev area: please source spackdev/env.sh or execute from spackdev/../')
+            tty.die('unable to find spackdev area: please source spackdev-aux/env.sh or execute from parent of spackdev-aux/')
 
 
 def install_dependencies(**kwargs):
@@ -54,8 +54,7 @@ def stage_package(package):
         tty.msg('stage: directory "{0}" exists: skipping'.format(package))
         return
     tty.msg('staging '  + package)
-    stage_py_filename = os.path.join('spackdev', package, 'bin', 'stage.py')
-    stage_tmp = '{0}/spackdev/.tmp'.format(os.environ['SPACKDEV_BASE'])
+    stage_tmp = '{0}/spackdev-aux/.tmp'.format(os.environ['SPACKDEV_BASE'])
     retval, output = spack_cmd(['stage', '-p', stage_tmp, package])
     if retval != 0:
         tty.die('staging {0} failed'.format(package))

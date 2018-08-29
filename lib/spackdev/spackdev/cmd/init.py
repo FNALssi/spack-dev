@@ -110,7 +110,7 @@ class PathFixer:
     def __init__(self, spack_install, spack_stage):
         self.spack_install = spack_install
         self.spack_stage = spack_stage
-        self.spackdev_install = os.path.join(spackdev_base, 'build', 'install')
+        self.spackdev_install = os.path.join(spackdev_base, 'install')
         self.spackdev_stage = os.path.join(spackdev_base, 'build')
 
     def set_packages(self, *args):
@@ -188,18 +188,21 @@ def get_additional(requested, dependencies):
 
 
 def init_cmakelists(project='spackdev'):
-    f = open(os.path.join('spackdev', 'CMakeLists.txt'), 'w')
+    f = open(os.path.join('srcs', 'CMakeLists.txt'), 'w')
     f.write(
         '''cmake_minimum_required(VERSION ${{CMAKE_VERSION}})
 project({0} NONE)
 set(SPACKDEV_SOURCE_DIR "{1}")
+set(SPACKDEV_PREFIX "{2}")
 
 include(ExternalProject)
 
 set_property(DIRECTORY PROPERTY EP_STEP_TARGETS
              configure build install test
   )
-'''.format(project, srcs_topdir()))
+'''.format(project,
+                   srcs_topdir(),
+                   os.path.join(srcs_topdir(), 'install')))
     return f
 
 
@@ -208,7 +211,7 @@ def add_package_to_cmakelists(cmakelists, package, package_dependencies,
                               cmake_args, build_system):
 
     cmd_wrapper\
-        = lambda x : os.path.join(spackdev_base, 'spackdev', package, 'bin', x)
+        = lambda x : os.path.join(spackdev_base, 'spackdev-aux', package, 'bin', x)
 
     filtered_cmake_args = []
     cmake_generator = build_system.cmake_generator
@@ -251,7 +254,7 @@ ExternalProject_Add({package}
   DOWNLOAD_DIR "tmp/{package}"
   SOURCE_DIR "${{SPACKDEV_SOURCE_DIR}}/{package}"
   BINARY_DIR "{package}"
-  INSTALL_DIR "install/{package}"
+  INSTALL_DIR "${{SPACKDEV_PREFIX}}/{package}"
   CMAKE_COMMAND "{cmake_wrapper}"
   CMAKE_GENERATOR "{cmake_generator}"
   CMAKE_ARGS {cmake_args}
@@ -422,7 +425,7 @@ def get_environment(package, all_dependencies):
     environment = environment_from_pickle(package_env_file_name)
     os.remove(package_env_file_name)
     # This needs to be what we want it to be.
-    environment['SPACK_PREFIX'] = os.path.join(spackdev_base, 'build', 'install')
+    environment['SPACK_PREFIX'] = os.path.join(spackdev_base, 'install')
     return sanitized_environment(environment, drop_unchanged=True)
 
 
@@ -476,7 +479,7 @@ def create_cmd_wrappers(wrappers_dir, environment):
 
 def create_wrappers(package, environment):
     # print 'jfa start create_wrappers'
-    wrappers_dir = os.path.join('spackdev', package, 'bin')
+    wrappers_dir = os.path.join('spackdev-aux', package, 'bin')
     if not os.path.exists(wrappers_dir):
         os.makedirs(wrappers_dir)
     create_compiler_wrappers(wrappers_dir, environment)
@@ -508,13 +511,13 @@ def create_environment(packages, all_dependencies):
         environment = dict((var, path_fixer.fix(val)) for var, val in
                        environment.iteritems())
         create_wrappers(package, environment)
-        create_env_files(os.path.join('spackdev', package, 'env'), environment)
-    create_env_files('spackdev', sanitized_environment(os.environ))
+        create_env_files(os.path.join('spackdev-aux', package, 'env'), environment)
+    create_env_files('spackdev-aux', sanitized_environment(os.environ))
     return path_fixer
 
 
 def write_packages_file(requested, additional, all_dependencies):
-    packages_filename = os.path.join('spackdev', 'packages.sd')
+    packages_filename = os.path.join('spackdev-aux', 'packages.sd')
     install_args = ''
     with open(packages_filename, 'w') as f:
         f.write(' '.join(requested) + '\n')
@@ -529,7 +532,7 @@ def write_packages_file(requested, additional, all_dependencies):
 def create_build_area(build_system, args):
     os.mkdir('build')
     os.chdir('build')
-    cmd = ['cmake', '../spackdev',
+    cmd = ['cmake', '../srcs',
            '-G {0}'.format(cmd_quote(build_system.cmake_generator))]
     status, output = external_cmd(cmd, ignore_errors=True)
     if status != 0:
@@ -543,7 +546,7 @@ details and run:
 when you have addressed any problems.'''.
                   format(status=status,
                          env=os.path.join(os.environ['SPACKDEV_BASE'],
-                                          'spackdev', 'env.sh'),
+                                          'spackdev-aux', 'env.sh'),
                          build_dir=os.path.join(os.environ['SPACKDEV_BASE'],
                                                 'build'),
                          cmd=cmd))
@@ -556,9 +559,14 @@ def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
                            help="specs of packages to add to SpackDev area")
     subparser.add_argument('--dag-file',
-                           help='packages and dependencies should be inferred from the DAG specified in this text file (in "spack install" format)')
-    subparser.add_argument('-d', '--no-dependencies', action='store_true', dest='no_dependencies',
+                           help='packages and dependencies should be inferred from the list specified in this text file (in "spack install" format)')
+    subparser.add_argument('-d', '--no-dependencies', action='store_true',
+                           dest='no_dependencies',
                            help="do not have spack install dependent packages")
+    subparser.add_argument('-f', '--force', action='store_true',
+                           help="Continue if base directory is not empty")
+    subparser.add_argument('-b', '--base-dir', dest='base_dir',
+                           help="Specify base directory to use instead of current working directory")
     gengroup\
         = subparser.add_argument_group\
         ('generator control',
@@ -592,20 +600,47 @@ def init(parser, args):
     # Verbosity
     tty.set_verbose(args.verbose)
 
+    if args.base_dir:
+        if os.path.isdir(args.base_dir) or \
+           os.path.exists(os.path.dirname(args.base_dir)):
+            spackdev_base = os.path.abspath(args.base_dir)
+        else:
+            tty.die('spackdev init: {0} is not a directory or its parent does not exist.'
+                    .format(args.base_dir))
+
+    try:
+        if (not os.path.exists(spackdev_base)):
+            os.mkdir(spackdev_base)
+        os.chdir(spackdev_base)
+    except OSError:
+        tty.die('spackdev init: unable to make or change directory to {0}'
+                .format(spackdev_base))
+
     # Save for posterity
     os.environ['SPACKDEV_BASE'] = spackdev_base
-    if (not os.path.exists(spackdev_base)):
-        os.makedirs(spackdev_base)
-    os.chdir(spackdev_base)
 
     requested = args.packages
     dag_filename = args.dag_file
     build_system = Build_system(args.generator, args.override_generator)
     os.environ['SPACKDEV_GENERATOR'] = build_system.cmake_generator
 
-    if (os.path.exists('spackdev')) :
-        tty.die('spackdev init: cannot re-init (spackdev directory exists)')
-    os.mkdir('spackdev')
+    if os.listdir(spackdev_base):
+        if args.force:
+            tty.warn('spackdev init: (force) using non-empty directory {0}'
+                     .format(spackdev_base))
+        else:
+            tty.die('spackdev init: refusing to use non-empty directory {0}'
+                    .format(spackdev_base))
+
+    if (os.path.exists('spackdev-aux')):
+        if args.force:
+            tty.warn('spackdev init: (force) removing existing spackdev-aux, build and install directories from {0}'
+                     .format(spackdev_base))
+            for wd in ('spackdev-aux', 'install', 'build'):
+                shutil.rmtree(wd, ignore_errors=True)
+        else:
+            tty.die('spackdev init: cannot re-init (spackdev-aux directory exists)')
+    os.mkdir('spackdev-aux')
 
     tty.msg('requested packages: {0}{1}'.\
             format(', '.join(requested),
@@ -639,3 +674,5 @@ def init(parser, args):
 
     tty.msg('create and initialize build area')
     create_build_area(build_system, args)
+
+    tty.msg('initialization of {0} complete'.format(spackdev_base))

@@ -16,7 +16,7 @@ description = "run a command in the build environment of a spackdev package, or 
 def load_environment(package):
     package_env_file_name\
         = os.path.join(os.environ['SPACKDEV_BASE'],
-                       'spackdev', package, 'env', 'env.pickle')
+                       'spackdev-aux', package, 'env', 'env.pickle')
     if not os.path.exists(package_env_file_name):
         tty.die('unable to find environment for {0}: not a package being developed?'.format(package))
     environment = copy.copy(os.environ)
