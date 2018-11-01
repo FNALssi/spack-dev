@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-from spackdev import stage_package
-from spackdev import read_packages_file
-from spackdev.spack_import import tty
+from fnal.spack.dev import stage_package, read_packages_file
+from llnl.util import tty
 
 description  = 'stage packages in a spackdev area'
 

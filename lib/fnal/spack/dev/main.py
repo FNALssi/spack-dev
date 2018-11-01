@@ -8,6 +8,7 @@ def die(message):
     sys.stderr.write(message + '\n')
     sys.exit(1)
 
+
 def main(argv):
     parser = argparse.ArgumentParser(prog='spackdev')
     subparsers = parser.add_subparsers(metavar='SUBCOMMAND', dest="command")

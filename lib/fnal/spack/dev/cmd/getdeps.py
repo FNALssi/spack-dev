@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-from spackdev import install_dependencies
-from spackdev.spack_import import tty
+from fnal.spack.dev import install_dependencies
+from llnl.util import tty
 
 description  = 'install missing dependencies of packages in a SpackDev area'
 

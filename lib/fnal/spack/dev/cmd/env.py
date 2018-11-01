@@ -6,9 +6,9 @@ import copy
 import os
 import re
 import tempfile
-from spackdev import environment_from_pickle, sanitized_environment,\
+from fnal.spack.dev import environment_from_pickle, sanitized_environment,\
     bootstrap_environment
-from spackdev.spack_import import tty
+from llnl.util import tty
 
 description = "run a command in the build environment of a spackdev package, or start a shell in same."
 

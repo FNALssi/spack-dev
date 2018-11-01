@@ -1,15 +1,16 @@
-#!/usr/bin/env python
 from __future__ import print_function
 
 import argparse
-from spackdev import spack_cmd, external_cmd
-from spackdev import srcs_topdir, stage_packages, install_dependencies, \
+from fnal.spack.dev import spack_cmd, external_cmd
+from fnal.spack.dev import srcs_topdir, stage_packages, install_dependencies, \
     environment_from_pickle, sanitized_environment
-from spackdev.spack_import import tty, yaml, \
+from fnal.spack.dev import which
+from llnl.util import tty
+from spack.util.environment import \
     dump_environment, pickle_environment, env_var_to_source_line
-from spackdev import which
 from six.moves import shlex_quote as cmd_quote
 from six.moves import cPickle
+import ruamel.yaml as yaml
 
 import copy
 import glob
@@ -597,6 +598,7 @@ automatically use the selected generator regardless of this setting.""")
 
 
 def init(parser, args):
+    global spackdev_base
     # Verbosity
     tty.set_verbose(args.verbose)
 

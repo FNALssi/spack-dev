@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
-from spackdev import read_packages_file
+from fnal.spack.dev import read_packages_file
 import re
 import glob
 import os

@@ -5,7 +5,7 @@ import sys
 import os
 import ast
 import time
-from spack_import import tty
+from llnl.util import tty
 
 if sys.version_info[0] > 2 and sys.version_info[1] > 2:
     import shutil
@@ -38,7 +38,7 @@ def external_cmd(args, **kwargs):
     return status, output
 
 def read_packages_file():
-    packages_filename = os.path.join('spackdev', 'packages.sd')
+    packages_filename = os.path.join('spackdev-aux', 'packages.sd')
     with open(packages_filename, 'r') as f:
         first_line = f.readline().rstrip()
         if first_line.find('[') > -1:

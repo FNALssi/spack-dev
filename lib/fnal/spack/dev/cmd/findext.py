@@ -3,7 +3,7 @@
 from __future__ import print_function
 
 import argparse
-from spackdev import External_repo, Packages_yaml
+from fnal.spack.dev import External_repo, Packages_yaml
 description = "search for system packages and add to packages.yaml"
 
 

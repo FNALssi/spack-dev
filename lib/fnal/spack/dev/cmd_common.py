@@ -1,10 +1,8 @@
-#!/usr/bin/env python
-
 import os
 import re
 import shutil
 import sys
-from spack_import import tty
+from llnl.util import tty
 from misc import spack_cmd, read_packages_file
 from six.moves import shlex_quote as cmd_quote
 from six.moves import cPickle
