@@ -604,7 +604,7 @@ def init(parser, args):
 
     if args.base_dir:
         if os.path.isdir(args.base_dir) or \
-           os.path.exists(os.path.dirname(args.base_dir)):
+           os.path.exists(os.path.abspath(os.path.dirname(args.base_dir))):
             spackdev_base = os.path.abspath(args.base_dir)
         else:
             tty.die('spackdev init: {0} is not a directory or its parent does not exist.'
