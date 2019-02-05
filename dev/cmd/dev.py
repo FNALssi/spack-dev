@@ -20,13 +20,13 @@ _subcmds = None
 _subcmd_functions = {}
 
 
-def add_subcommand(subparser, pname):
+def add_subcommand(subparser, subcmd):
+    pname = spack.cmd.python_name(subcmd)
     module = spack.cmd.get_module_from(pname, 'fnal.spack.dev')
-    cmd_name = spack.cmd.cmd_name(pname)
-    sp = subparser.add_parser(cmd_name, help=module.description)
+    sp = subparser.add_parser(subcmd, help=module.description)
     module.setup_parser(sp)
     global _subcmd_functions
-    _subcmd_functions[cmd_name] = getattr(module, pname)
+    _subcmd_functions[subcmd] = getattr(module, pname)
 
 
 def setup_parser(subparser):
