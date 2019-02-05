@@ -11,8 +11,8 @@ SPACKDEV_LIB = os.path.realpath(os.path.join(os.path.dirname(SPACKDEV_FILE),
                                              '..', '..', 'lib'))
 sys.path.insert(0, SPACKDEV_LIB)
 
-description = 'Develop multiple Spack packages simultaneously'
-section = 'dev'
+description = 'develop multiple Spack packages simultaneously'
+section = 'developer'
 level = 'long'
 
 _subcmd_dir = os.path.join(SPACKDEV_LIB, 'fnal', 'spack', 'dev', 'cmd')
