@@ -49,7 +49,7 @@ def setup_parser(subparser):
                            help='Show the package whose environment is current at the command prompt of interactive shells (BASH only).')
 
 
-def env(parser, args):
+def build_env(parser, args):
     bootstrap_environment()
     if not args.cmd:
         shell = os.environ['SPACK_SHELL']
