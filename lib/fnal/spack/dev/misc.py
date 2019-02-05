@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from commands import getstatusoutput
 import sys
 import os
 import ast
