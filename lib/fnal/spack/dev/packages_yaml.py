@@ -4,17 +4,11 @@ from __future__ import print_function
 
 import os.path
 import shutil
-from misc import spack_cmd
-
+import spack.architecture
 
 class Packages_yaml:
     def __init__(self):
-        retval, output = spack_cmd(['arch'])
-        dashpos = output.find('-')
-        if dashpos > 0:
-            self.platform = output[:dashpos]
-        else:
-            self.platform = output
+        self.platform = spack.architecture.platform()
         self.filename = os.path.join(os.path.expanduser('~'),
                                      '.spack/', self.platform,
                                      'packages.yaml')

@@ -1,16 +1,18 @@
 from __future__ import print_function
 
 import argparse
-from fnal.spack.dev import spack_cmd, external_cmd
 from fnal.spack.dev import srcs_topdir, stage_packages, install_dependencies, \
-    environment_from_pickle, sanitized_environment
+    sanitized_environment
 from fnal.spack.dev import which
 from llnl.util import tty
 from spack.util.environment import \
     dump_environment, pickle_environment, env_var_to_source_line
 from six.moves import shlex_quote as cmd_quote
 from six.moves import cPickle
-import ruamel.yaml as yaml
+import spack.cmd
+import spack.build_environment
+import spack.paths
+import spack.util.executable
 
 import copy
 import glob
@@ -20,7 +22,6 @@ import shutil
 import stat
 import subprocess
 import sys
-
 
 description = "initialize a spackdev area"
 spackdev_base = os.getcwd()
@@ -32,56 +33,6 @@ def append_unique(item, the_list):
             append_unique(subitem, the_list)
     elif (not item in the_list) and (not item == []):
         the_list.append(item)
-
-
-class Dependencies:
-    def __init__(self):
-        self.deps = {}
-        self.all_packages = {}
-
-    def add(self, package, spec, dependencies):
-        if not self.deps.has_key(package):
-            self.deps[package] = dependencies.keys()
-        else:
-            append_unique(dependencies.keys(), self.deps[package])
-        self.all_packages[package] = spec
-        self.all_packages.update\
-            (dict((key, val) for (key, val) in dependencies.iteritems() if not
-              self.all_packages.has_key(key)))
-
-    def get_dependencies(self, package):
-        if self.deps.has_key(package):
-            retval = self.deps[package]
-        else:
-            retval = []
-        return retval
-
-    def get_all_dependencies(self, package, retval = None):
-        if retval is None:
-            retval = []
-        for subpackage in self.get_dependencies(package):
-            append_unique(subpackage, retval)
-            self.get_all_dependencies(subpackage, retval)
-        return retval
-
-    def get_all_packages(self):
-        return self.all_packages
-
-    def package_info(self, package):
-        try:
-            return self.all_packages[package]
-        except KeyError:
-            tty.die('unable to obtain package information for {0}'.format(package))
-
-    def has_dependency(self, package, other_packages, tree=False):
-        for other in other_packages:
-            deps = self.get_dependencies(package)
-            if (other in deps) or \
-               (tree and any([self.has_dependency(d, other_packages, tree=tree) for
-                              d in deps])):
-                return True
-        else:
-            return False
 
 
 generator_extractor = re.compile(r'(?:.*?-\s+)?(Ninja|Unix Makefiles)')
@@ -103,6 +54,7 @@ class Build_system:
                 tty.msg('warning: ninja build selected, but neither "ninja" nor "ninja-build" are available')
         self.override = override
 
+
 class PathFixer:
     """Class to handle the (relatively) efficient replacement of spack stage
     and install prefixes with their SpackDev equivalents where
@@ -115,7 +67,7 @@ class PathFixer:
         self.spackdev_stage = os.path.join(spackdev_base, 'build')
 
     def set_packages(self, *args):
-        # Replace all stage and insatll paths for packages we're
+        # Replace all stage and install paths for packages we're
         # developing with their correct locations.
         raw_matcher = r'(?:(?<=[=\s;:"\'])|^){{path}}/(?:[^;:\"]*?/)*?(?P<pkg>{0})-[^;:"\'/]*{{extra}}'.\
                      format('|'.join(args))
@@ -130,61 +82,26 @@ class PathFixer:
         return result
 
 
-def yaml_to_specs(yaml_text):
-    documents = []
-    document = ''
-    for line in yaml_text.split('\n'):
-        if line == 'spec:':
-            if len(document) > 0:
-                documents.append(document)
-            document = 'spec:\n'
-        else:
-            document += line + '\n'
-    if len(document) > 0:
-        documents.append(document)
-    super_specs = map(yaml.load, documents)
-    specs = {}
-    for spec in super_specs:
-        for sub_spec in spec['spec']:
-            specs.update(dict((key, value) for (key, value) in sub_spec.iteritems() if key not in specs))
-    return specs
-
-
 def extract_specs(spec_source):
-    cmd = ['spec', '--yaml']
+    spec_args = []
     if type(spec_source) == list:
         # List of packages.
-        cmd.extend(spec_source)
+        spec_args.extend(spec_source)
     else:
         # File containing spack install specification.
         with open(spec_source, 'r') as dag_file:
-            cmd.append(dag_file.read().rstrip())
-    status, output = spack_cmd(cmd)
-    specs = yaml_to_specs(output)
-    return specs
+            spec_args.extend(dag_file.read().rstrip().split())
+    return spack.cmd.parse_specs(spec_args, concretize=True)
 
 
-def calculate_dependencies(specs):
-    dependencies = Dependencies()
-    for name in specs.keys():
-        if specs[name].has_key('dependencies'):
-            spec_deps = specs[name]['dependencies']
-            package_dependencies \
-                = dict((d, spec_deps[d]) for d in spec_deps.keys())
-        else:
-            package_dependencies = {}
-        dependencies.add(name, specs[name], package_dependencies)
-    return dependencies
-
-
-def get_additional(requested, dependencies):
+def get_additional(requested, specs):
     additional = []
     for package in requested:
-        append_unique([dep for dep in
-                       dependencies.get_all_dependencies(package) if
-                       dep not in requested and
-                       dependencies.has_dependency(dep, requested, tree=True)],
-                      additional)
+        for spec in specs:
+            append_unique([dep for dep in spec.flat_dependencies() if
+                           dep not in requested and
+                           dep in spec[package].dependents_dict() ],
+                          additional)
     return additional
 
 
@@ -274,52 +191,39 @@ ExternalProject_Add({package}
            format(make_wrapper=cmd_wrapper('make')),
            package_dependency_targets=' '.join(package_dependencies)))
 
+
 cmake_args_start = re.compile(r'\[cmake-args\s+([^\]]+)\]')
 cmake_args_end = re.compile(r'\[/cmake-args\]')
-def extract_cmake_args(packages, install_args):
-    retval, output = spack_cmd(['install', '--fake', '--only', 'package',
-                                install_args])
+
+
+def extract_cmake_args(packages, package_specs):
     package_cmake_args = {}
-    current_package = None
-    current_package_args = []
-    for line in output.splitlines():
-        start_match = cmake_args_start.match(line)
-        if start_match:
-            current_package = start_match.group(1)
-        elif current_package:
-            end_match = cmake_args_end.match(line)
-            if end_match:
-                package_cmake_args[current_package] = current_package_args
-                current_package = None
-                current_package_args = []
-            else:
-                current_package_args.append(line)
-    missing_packages = []
     for package in packages:
-        if package not in package_cmake_args:
-            missing_packages.append(package)
-
-    retval, output = spack_cmd(['uninstall', '-y', install_args])
-    if missing_packages:
-        tty.die('unable to ascertain CMake arguments for packages: {0}'.
-                format(' '.join(missing_packages)))
-
+        package_obj = package_specs[package].package
+        package_cmake_args[package] = package_obj.std_cmake_args + \
+                                      package_obj.cmake_args()
     return package_cmake_args
 
 
-def write_cmakelists(packages, all_dependencies, build_system, path_fixer):
-    install_args = ' '.join(format_packages_for_install(packages,
-                                                        all_dependencies))
-    package_cmake_args = extract_cmake_args(packages, install_args)
+def intersection(a, b):
+    temp = set(b)
+    c = [ val for val in a if val in temp ]
+    return c
+
+
+def write_cmakelists(packages, package_specs, build_system, path_fixer):
+    package_cmake_args = extract_cmake_args(packages, package_specs)
     cmakelists = init_cmakelists()
     remaining_packages = copy.copy(packages)
     while remaining_packages != []:
         for package in remaining_packages:
-            if not all_dependencies.has_dependency(package, remaining_packages):
-                package_dependencies = []
-                for dependency in all_dependencies.get_dependencies(package):
-                    if dependency in packages:
-                        package_dependencies.append(dependency)
+            spec = package_specs[package]
+            dep_dict = spec.dependencies_dict()
+            if not any(other for other in remaining_packages if
+                       other in dep_dict):
+                # package is a leaf.
+                package_dependencies\
+                    = intersection(packages, dep_dict.keys())
                 # Fix install / stage paths.
                 path_fixer.set_packages(package, *package_dependencies)
                 package_cmake_args[package]\
@@ -333,8 +237,7 @@ def write_cmakelists(packages, all_dependencies, build_system, path_fixer):
 
 
 def spack_stage_top():
-    retval, output = spack_cmd(['location', '-S'])
-    return output
+    return spack.paths.stage_path
 
 
 def par_val_to_string(par, val):
@@ -417,14 +320,22 @@ def format_packages_for_install(packages, all_dependencies):
     return install_args
 
 
-def get_environment(package, all_dependencies):
-    package_env_file_name = '{0}-environment.pickle'.format(package)
-    status, output \
-        = spack_cmd(['env', '--pickle'] +
-                    format_packages_for_install([package], all_dependencies) +
-                    ['--', package_env_file_name])
-    environment = environment_from_pickle(package_env_file_name)
-    os.remove(package_env_file_name)
+class temp_environment:
+    def __enter__(self):
+        self._safe_env = os.environ.copy()
+        return os.environ
+    def __exit__(self, type, value, traceback):
+        os.environ.clear()
+        os.environ.update(self._safe_env)
+
+
+def get_environment(spec):
+    package_name = spec.name
+    package_env_file_name = '{0}-environment.pickle'.format(package_name)
+    safe_env = os.environ
+    with temp_environment():
+        spack.build_environment.setup_package(spec.package, False)
+        environment = os.environ.copy()
     # This needs to be what we want it to be.
     environment['SPACK_PREFIX'] = os.path.join(spackdev_base, 'install')
     return sanitized_environment(environment, drop_unchanged=True)
@@ -479,7 +390,6 @@ def create_cmd_wrappers(wrappers_dir, environment):
 
 
 def create_wrappers(package, environment):
-    # print 'jfa start create_wrappers'
     wrappers_dir = os.path.join('spackdev-aux', package, 'bin')
     if not os.path.exists(wrappers_dir):
         os.makedirs(wrappers_dir)
@@ -500,11 +410,11 @@ def create_env_files(env_dir, environment):
     pickle_environment(os.path.join(env_dir, 'env.pickle'), environment)
 
 
-def create_environment(packages, all_dependencies):
+def create_environment(packages, package_specs):
     path_fixer = None
     for package in packages:
         tty.msg('creating environment for {0}'.format(package))
-        environment = get_environment(package, all_dependencies)
+        environment = get_environment(package_specs[package])
         if path_fixer is None:
             path_fixer = PathFixer(environment['SPACK_INSTALL'], spack_stage_top())
         # Fix paths in environment
@@ -517,41 +427,60 @@ def create_environment(packages, all_dependencies):
     return path_fixer
 
 
-def write_packages_file(requested, additional, all_dependencies):
+def write_packages_file(requested, additional, specs):
     packages_filename = os.path.join('spackdev-aux', 'packages.sd')
     install_args = ''
+    dev_packages = requested + additional
+    dep_specs = []
+    install_names = []
+    for package in dev_packages:
+        for spec in specs:
+            dep_specs_new\
+                = [dep for dep in spec[package].dependencies() if
+                   dep.name not in dev_packages + install_names]
+            dep_specs += dep_specs_new
+            install_names.extend([dep.name for dep in dep_specs_new])
+
     with open(packages_filename, 'w') as f:
         f.write(' '.join(requested) + '\n')
         f.write(' '.join(additional) + '\n')
-        install_args\
-            = ' '.join(format_dependencies_for_install(requested + additional,
-                                                       all_dependencies))
+        install_args = ' '.join([str(dep) for dep in dep_specs])
         f.write(install_args + '\n')
-    return install_args
+
+    return dep_specs
+
+
+cmake = spack.util.executable.Executable('cmake')
 
 
 def create_build_area(build_system, args):
     os.mkdir('build')
     os.chdir('build')
-    cmd = ['cmake', '../srcs',
-           '-G {0}'.format(cmd_quote(build_system.cmake_generator))]
-    status, output = external_cmd(cmd, ignore_errors=True)
-    if status != 0:
+    cmd_args = [ '../srcs',
+                 '-G',
+                 '{0}'.format(build_system.cmake_generator) ]
+    output = ''
+    try:
+        output = cmake(*cmd_args, output=str, error=str)
+    except spack.util.executable.ProcessError as e:
         tty.msg(output)
         tty.error('''The SpackDev area has been initialized, but the initial
-CMake command returned with status {status}. Please check output above for
+CMake command returned with status {status} and message:
+"{msg}". Please check output above for
 details and run:
   . {env}
   cd {build_dir}
   {cmd}
 when you have addressed any problems.'''.
-                  format(status=status,
-                         env=os.path.join(os.environ['SPACKDEV_BASE'],
-                                          'spackdev-aux', 'env.sh'),
-                         build_dir=os.path.join(os.environ['SPACKDEV_BASE'],
-                                                'build'),
-                         cmd=cmd))
-        sys.exit(status)
+                  format(msg=' '.join([e.message, e.long_message]),
+                         status=cmake.returncode,
+                         env=cmd_quote(os.path.join(os.environ['SPACKDEV_BASE'],
+                                                    'spackdev-aux', 'env.sh')),
+                         build_dir=cmd_quote(os.path.join(os.environ['SPACKDEV_BASE'],
+                                                          'build')),
+                         cmd=' '.join([cmd_quote(x) for x in
+                                       [cmake.name] + cmd_args])))
+        sys.exit(cmake.returncode)
     if args.verbose:
         tty.msg(output)
 
@@ -646,33 +575,40 @@ def init(parser, args):
 
     tty.msg('requested packages: {0}{1}'.\
             format(', '.join(requested),
-                   ' from DAG as specified in {0}'.format(dag_filename)
+                   ' from install tree as specified in {0}'.format(dag_filename)
                    if dag_filename else ''))
     specs = extract_specs(dag_filename if dag_filename else requested)
-    all_dependencies = calculate_dependencies(specs)
-    additional = get_additional(requested, all_dependencies)
+    additional = get_additional(requested, specs)
     if additional:
         tty.msg('additional inter-dependent packages: ' +
                 ' '.join(additional))
     dev_packages = requested + additional
-    install_args = write_packages_file(requested, additional, all_dependencies)
+    dep_specs = write_packages_file(requested, additional, specs)
+
+    package_specs = {}
+    for package in dev_packages:
+        spec = reduce(lambda a, b : a if package in a else b,
+                      specs,
+                      {})[package]
+        if package in spec:
+            package_specs[package] = spec[package]
 
     if not args.no_stage:
         tty.msg('stage sources for {0}'.format(dev_packages))
-        stage_packages(dev_packages)
+        stage_packages(dev_packages, package_specs)
 
     if not args.no_dependencies:
         tty.msg('install dependencies')
-        (retval, output) = install_dependencies(dev_packages=dev_packages,
-                                                install_args=install_args)
+        install_dependencies(dev_packages=dev_packages,
+                             dep_specs=dep_specs)
         if (args.verbose):
             tty.msg(output)
 
     tty.msg('create wrapper scripts')
-    path_fixer = create_environment(dev_packages, all_dependencies)
+    path_fixer = create_environment(dev_packages, package_specs)
 
     tty.msg('generate top level CMakeLists.txt')
-    write_cmakelists(dev_packages, all_dependencies, build_system, path_fixer)
+    write_cmakelists(dev_packages, package_specs, build_system, path_fixer)
 
     tty.msg('create and initialize build area')
     create_build_area(build_system, args)

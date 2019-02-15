@@ -3,10 +3,10 @@ import re
 import shutil
 import sys
 from llnl.util import tty
-from misc import spack_cmd, read_packages_file
+from misc import read_packages_file
 from six.moves import shlex_quote as cmd_quote
 from six.moves import cPickle
-
+import spack.cmd
 
 def bootstrap_environment():
     if 'SPACKDEV_BASE' not in os.environ:
@@ -19,23 +19,20 @@ def bootstrap_environment():
 
 
 def install_dependencies(**kwargs):
-    if 'install_args' in kwargs:
-        install_args = kwargs['install_args']
+    if 'dep_specs' in kwargs:
+        dep_specs = kwargs['dep_specs']
         dev_packages = kwargs['dev_packages']
     else:
+        # Concretization is necessary.
         (requested, additional, install_args) = read_packages_file()
+        dep_specs = spack.cmd.parse_specs(install_args, concretize=True)
         dev_packages = requested + additional
 
     tty.msg('requesting spack install of dependencies for: {0}'
             .format(' '.join(dev_packages)))
-    excludes = ','.join(dev_packages)
-    if len(install_args) >0:
-        retval, output = spack_cmd(['install',
-#                                '--implicit',
-                                install_args])
-    else: 
-        retval, output = spack_cmd(['info',' '.join(dev_packages)])
-    return retval, output
+    for dep in dep_specs:
+        tty.debug('installing dependency {0}'.format(dep.name))
+        dep.package.do_install()
 
 
 def srcs_topdir():
@@ -44,7 +41,7 @@ def srcs_topdir():
     return result
 
 
-def stage_package(package):
+def stage_package(package, spec):
     topdir = srcs_topdir()
     if not os.path.exists(topdir):
         os.mkdir(topdir)
@@ -52,17 +49,15 @@ def stage_package(package):
         tty.msg('stage: directory "{0}" exists: skipping'.format(package))
         return
     tty.msg('staging '  + package)
-    stage_tmp = '{0}/spackdev-aux/.tmp'.format(os.environ['SPACKDEV_BASE'])
-    retval, output = spack_cmd(['stage', '-p', stage_tmp, package])
-    if retval != 0:
-        tty.die('staging {0} failed'.format(package))
-    shutil.move('{0}/{1}'.format(stage_tmp, package), '{0}/'.format(topdir))
-    os.remove(stage_tmp)
+    spec.package.path\
+        = '{0}/spackdev-aux/.tmp'.format(os.environ['SPACKDEV_BASE'])
+    spec.package.do_stage()
+    shutil.move('{0}/{1}'.format(spec.package.path, package),
+                '{0}/'.format(topdir))
 
-
-def stage_packages(packages):
+def stage_packages(packages, package_specs):
     for package in packages:
-        stage_package(package)
+        stage_package(package, package_specs[package])
 
 
 def environment_from_pickle(path):
