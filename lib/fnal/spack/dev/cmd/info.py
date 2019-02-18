@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
-from fnal.spack.dev import read_packages_file
+from fnal.spack.dev import read_package_info
 import re
 import glob
 import os
@@ -32,11 +32,13 @@ def info(parser, args):
         sys.stderr.write('spackdev info: ' + dir + ' is not a SpackDev area\n')
         sys.exit(1)
 
-    requested, additional, install_args =  read_packages_file()
+    requested, additional, deps =  read_package_info(want_specs=False)
     print('requested packages:')
     for package in requested:
         print('    ' + package)
-    if len(additional) > 0:
-        print('additional dependent packages:')
-        for package in additional:
-            print('    ' + package)
+    print('additional dependent packages:')
+    for package in additional:
+        print('    ' + package)
+    print('collected dependencies: ')
+    for package in deps:
+        print('    ' + package)

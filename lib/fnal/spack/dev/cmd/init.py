@@ -427,7 +427,7 @@ def create_environment(packages, package_specs):
     return path_fixer
 
 
-def write_packages_file(requested, additional, specs):
+def write_package_info(requested, additional, specs):
     packages_filename = os.path.join('spackdev-aux', 'packages.sd')
     install_args = ''
     dev_packages = requested + additional
@@ -441,12 +441,21 @@ def write_packages_file(requested, additional, specs):
             dep_specs += dep_specs_new
             install_names.extend([dep.name for dep in dep_specs_new])
 
+    # Write package names
     with open(packages_filename, 'w') as f:
         f.write(' '.join(requested) + '\n')
         f.write(' '.join(additional) + '\n')
         f.write(' '.join([dep.name for dep in dep_specs]) + '\n')
-        install_args = ' '.join([str(dep) for dep in specs])
-        f.write(install_args + '\n')
+
+    # Write spec YAML.
+    spec_dir = os.path.join('spackdev-aux', 'spec')
+    if not os.path.exists(spec_dir):
+        os.makedirs(spec_dir)
+
+    for dep in specs:
+        with open(os.path.join(spec_dir, '{0}.yaml'.format(dep.name)), 'w') \
+             as f:
+            dep.to_yaml(f, True)
 
     return dep_specs
 
@@ -584,7 +593,7 @@ def init(parser, args):
         tty.msg('additional inter-dependent packages: ' +
                 ' '.join(additional))
     dev_packages = requested + additional
-    dep_specs = write_packages_file(requested, additional, specs)
+    dep_specs = write_package_info(requested, additional, specs)
 
     package_specs = {}
     for package in dev_packages:

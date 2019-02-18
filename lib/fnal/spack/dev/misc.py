@@ -6,13 +6,13 @@ import ast
 import time
 from llnl.util import tty
 import spack.cmd
-
+import spack.spec
 if sys.version_info[0] > 2 and sys.version_info[1] > 2:
     import shutil
 else:
     from distutils import spawn
 
-def read_packages_file():
+def read_package_info(want_specs=True):
     packages_filename = os.path.join('spackdev-aux', 'packages.sd')
     with open(packages_filename, 'r') as f:
         first_line = f.readline().rstrip()
@@ -21,11 +21,20 @@ def read_packages_file():
         requesteds = first_line.split()
         additional = f.readline().rstrip().split()
         deps = f.readline().rstrip().split()
-        install_args = f.readline().rstrip()
-        if not install_args:
-            tty.die('packages.sd in obsolete format (insufficient information): please re-execute spack init or initialize a new spackdev area.')
-        install_specs = spack.cmd.parse_specs(install_args, concretize=True)
-    return requesteds, additional, deps, install_specs
+
+    install_specs = []
+    if want_specs:
+        specs_dir = os.path.join('spackdev-aux', 'spec')
+        if not os.path.exists(specs_dir):
+            tty.die('YAML spec information missing: please re-execute spack init or initialize a new spackdev area.')
+        for spec_file in os.listdir(specs_dir):
+            if spec_file.endswith('.yaml'):
+                with open(os.path.join(specs_dir, spec_file), 'r') as f:
+                    install_specs.append(spack.spec.Spec.from_yaml(f))
+        return requesteds, additional, deps, install_specs
+
+    return requesteds, additional, deps
+
 
 def which(executable):
     if sys.version_info[0] > 2 and sys.version_info[1] > 2:

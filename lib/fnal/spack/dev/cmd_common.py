@@ -3,7 +3,7 @@ import re
 import shutil
 import sys
 from llnl.util import tty
-from misc import read_packages_file
+from misc import read_package_info
 from six.moves import shlex_quote as cmd_quote
 from six.moves import cPickle
 import spack.cmd
@@ -28,7 +28,7 @@ def install_dependencies(**kwargs):
         dev_packages = kwargs['dev_packages']
     else:
         # Concretization is necessary.
-        (requested, additional, deps, install_specs) = read_packages_file()
+        (requested, additional, deps, install_specs) = read_package_info()
         dev_packages = requested + additional
         dep_specs = [ get_package_spec(dep, install_specs) for dep in deps ]
 
