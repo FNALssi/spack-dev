@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import argparse
 from fnal.spack.dev import srcs_topdir, stage_packages, install_dependencies, \
-    sanitized_environment
+    sanitized_environment, get_package_spec
 from fnal.spack.dev import which
 from llnl.util import tty
 from spack.util.environment import \
@@ -444,7 +444,8 @@ def write_packages_file(requested, additional, specs):
     with open(packages_filename, 'w') as f:
         f.write(' '.join(requested) + '\n')
         f.write(' '.join(additional) + '\n')
-        install_args = ' '.join([str(dep) for dep in dep_specs])
+        f.write(' '.join([dep.name for dep in dep_specs]) + '\n')
+        install_args = ' '.join([str(dep) for dep in specs])
         f.write(install_args + '\n')
 
     return dep_specs
@@ -587,11 +588,12 @@ def init(parser, args):
 
     package_specs = {}
     for package in dev_packages:
-        spec = reduce(lambda a, b : a if package in a else b,
-                      specs,
-                      {})[package]
-        if package in spec:
+        spec = get_package_spec(package, specs)
+        if spec:
             package_specs[package] = spec[package]
+        else:
+            tty.die("Unable to find spec for specified package {0}".\
+                    format(package))
 
     if not args.no_stage:
         tty.msg('stage sources for {0}'.format(dev_packages))

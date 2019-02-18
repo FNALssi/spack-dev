@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
-from fnal.spack.dev import stage_package, read_packages_file
+from fnal.spack.dev import stage_package, read_packages_file, get_package_spec
 from llnl.util import tty
 
 description  = 'stage packages in a spackdev area'
@@ -17,7 +17,7 @@ def validate_args(packages, all_packages):
                     .format(package, all_packages))
 
 def stage(parser, args):
-    requested, additional, install_args = read_packages_file()
+    requested, additional, deps, install_specs = read_packages_file()
     all_packages = requested + additional
 
     validate_args(args.packages, all_packages)
@@ -28,4 +28,4 @@ def stage(parser, args):
 
     for package in packages:
         tty.msg('staging ' + package)
-        stage_package(package)
+        stage_package(package, get_package_spec(package, install_specs))

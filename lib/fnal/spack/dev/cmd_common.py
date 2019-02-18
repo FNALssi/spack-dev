@@ -18,15 +18,19 @@ def bootstrap_environment():
             tty.die('unable to find spackdev area: please source spackdev-aux/env.sh or execute from parent of spackdev-aux/')
 
 
+def get_package_spec(package, specs):
+    return reduce(lambda a, b : a if package in a else b, specs, {})[package]
+
+
 def install_dependencies(**kwargs):
     if 'dep_specs' in kwargs:
         dep_specs = kwargs['dep_specs']
         dev_packages = kwargs['dev_packages']
     else:
         # Concretization is necessary.
-        (requested, additional, install_args) = read_packages_file()
-        dep_specs = spack.cmd.parse_specs(install_args, concretize=True)
+        (requested, additional, deps, install_specs) = read_packages_file()
         dev_packages = requested + additional
+        dep_specs = [ get_package_spec(dep, install_specs) for dep in deps ]
 
     tty.msg('requesting spack install of dependencies for: {0}'
             .format(' '.join(dev_packages)))
