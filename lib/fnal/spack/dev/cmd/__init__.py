@@ -47,8 +47,7 @@ def stage_package(package, spec):
         = os.path.join(os.environ['SPACKDEV_BASE'], dev.spackdev_aux_tmp_subdir)
     spec.package.do_stage()
     shutil.move(os.path.join(spec.package.path, package),
-                os.path.join(topdir),
-                '') # Need trailing /
+                os.path.join(topdir,'')) # Need trailing /
 
 
 def stage_packages(packages, package_specs):

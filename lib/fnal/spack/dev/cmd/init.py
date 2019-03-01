@@ -631,8 +631,6 @@ def init(parser, args):
         tty.msg('install dependencies')
         dev.cmd.install_dependencies(dev_packages=dev_packages,
                                      dep_specs=dep_specs)
-        if (args.verbose):
-            tty.msg(output)
 
     tty.msg('create wrapper scripts')
     path_fixer = create_environment(dev_packages, package_specs)
