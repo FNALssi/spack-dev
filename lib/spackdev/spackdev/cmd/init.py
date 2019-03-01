@@ -597,6 +597,8 @@ automatically use the selected generator regardless of this setting.""")
 
 
 def init(parser, args):
+    global spackdev_base
+
     # Verbosity
     tty.set_verbose(args.verbose)
 
