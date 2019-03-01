@@ -100,12 +100,15 @@ def extract_specs(spec_source):
 
 def get_additional(requested, specs):
     additional = []
-    for package in requested:
-        for spec in specs:
-            append_unique([dep for dep in spec.flat_dependencies() if
-                           dep not in requested and
-                           dep in spec[package].dependents_dict() ],
-                          additional)
+    additional_size = -1
+    while len(additional) != additional_size:
+        additional_size = len(additional)
+        for package in requested + additional:
+            for spec in specs:
+                append_unique([dep for dep in spec.flat_dependencies() if
+                               dep not in requested and
+                               dep in spec[package].dependents_dict()],
+                              additional)
     return additional
 
 
@@ -135,6 +138,7 @@ def add_package_to_cmakelists(cmakelists, package, package_dependencies,
     cmd_wrapper\
         = lambda x : os.path.join(spackdev_base,
                                   dev.spackdev_aux_packages_subdir,
+                                  package,
                                   'bin',
                                   x)
 
@@ -397,7 +401,7 @@ def create_cmd_wrappers(wrappers_dir, environment):
 
 
 def create_wrappers(package, environment):
-    wrappers_dir = os.path.join(dev.spackdev_aux_packages_subdir, 'bin')
+    wrappers_dir = os.path.join(dev.spackdev_aux_packages_subdir, package, 'bin')
     if not os.path.exists(wrappers_dir):
         os.makedirs(wrappers_dir)
     create_compiler_wrappers(wrappers_dir, environment)
@@ -429,7 +433,7 @@ def create_environment(packages, package_specs):
         environment = dict((var, path_fixer.fix(val)) for var, val in
                        environment.iteritems())
         create_wrappers(package, environment)
-        create_env_files(os.path.join(dev.spackdev_aux_packages_subdir, 'env'), environment)
+        create_env_files(os.path.join(dev.spackdev_aux_packages_subdir, package, 'env'), environment)
     create_env_files('spackdev-aux', sanitized_environment(os.environ))
     return path_fixer
 
