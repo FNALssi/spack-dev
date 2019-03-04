@@ -14,7 +14,8 @@ from fnal.spack.dev.environment import sanitized_environment, srcs_topdir
 from llnl.util import tty
 from six.moves import shlex_quote as cmd_quote
 
-if sys.version_info[0] > 2 and sys.version_info[1] > 2:
+if sys.version_info[0] > 3 or \
+   (sys.version_info[0] == 3 and sys.version_info[1] > 2):
     # Available from Python 3.3 onwards.
     from shutil import which
 else:
