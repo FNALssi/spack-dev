@@ -100,15 +100,18 @@ def extract_specs(spec_source):
 
 def get_additional(requested, specs):
     additional = []
-    additional_size = -1
-    while len(additional) != additional_size:
-        additional_size = len(additional)
-        for package in requested + additional:
+    found = copy.copy(requested)
+    while len(found):
+        all_done = requested + additional
+        to_consider = copy.copy(found)
+        found = []
+        for package in to_consider:
             for spec in specs:
                 append_unique([dep for dep in spec.flat_dependencies() if
-                               dep not in requested and
+                               dep not in all_done and
                                dep in spec[package].dependents_dict()],
-                              additional)
+                              found)
+        additional += found
     return additional
 
 
