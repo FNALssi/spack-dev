@@ -72,10 +72,14 @@ class PathFixer:
         self.spackdev_stage = os.path.join(spackdev_base, 'build')
 
     def set_packages(self, *args):
+        # Sort package names by decreasing length to avoid problems with
+        # packages that are dash-separated subsets of other packages in
+        # the list.
+        sorted_args = sorted(args, key=lambda x: -len(x))
         # Replace all stage and install paths for packages we're
         # developing with their correct locations.
         raw_matcher = r'(?:(?<=[=\s;:"\'])|^){{path}}/(?:[^;:\"]*?/)*?(?P<pkg>{0})-[^;:"\'/]*{{extra}}'.\
-                     format('|'.join(args))
+                     format('|'.join(sorted_args))
         self.install_path_finder\
             = re.compile(raw_matcher.format(path=self.spack_install, extra=''))
         self.stage_path_finder\
