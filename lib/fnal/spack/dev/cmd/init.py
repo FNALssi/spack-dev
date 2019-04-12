@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 
+import spack.store  # For spack.store.root to replace SPACK_INSTALL
+
 import fnal.spack.dev as dev
 from fnal.spack.dev.environment import sanitized_environment, srcs_topdir
 
@@ -356,7 +358,8 @@ def get_environment(spec):
         spack.build_environment.setup_package(spec.package, False)
         environment = os.environ.copy()
     # This needs to be what we want it to be.
-    environment['SPACK_PREFIX'] = os.path.join(spackdev_base, 'install')
+    if 'SPACK_PREFIX' in environment:
+        environment['SPACK_PREFIX'] = os.path.join(spackdev_base, 'install')
     return sanitized_environment(environment, drop_unchanged=True)
 
 
@@ -435,7 +438,7 @@ def create_environment(packages, package_specs):
         tty.msg('creating environment for {0}'.format(package))
         environment = get_environment(package_specs[package])
         if path_fixer is None:
-            path_fixer = PathFixer(environment['SPACK_INSTALL'], spack_stage_top())
+            path_fixer = PathFixer(spack.store.root, spack_stage_top())
         # Fix paths in environment
         path_fixer.set_packages(*packages)
         environment = dict((var, path_fixer.fix(val)) for var, val in
