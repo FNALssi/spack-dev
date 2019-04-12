@@ -352,8 +352,6 @@ class temp_environment:
 
 def get_environment(spec):
     package_name = spec.name
-    package_env_file_name = '{0}-environment.pickle'.format(package_name)
-    safe_env = os.environ
     with temp_environment():
         spack.build_environment.setup_package(spec.package, False)
         environment = os.environ.copy()
