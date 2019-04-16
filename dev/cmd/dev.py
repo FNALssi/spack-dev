@@ -32,7 +32,7 @@ def add_subcommand(subparser, subcmd):
 def setup_parser(subparser):
     sp = subparser.add_subparsers(metavar='SUBCOMMAND', dest='dev_command')
     global _subcmds
-    _subcmds = spack.cmd.all_commands(_subcmds, _subcmd_dir)
+    _subcmds = spack.cmd.find_commands(_subcmd_dir)
     for subcmd in _subcmds:
         add_subcommand(sp, subcmd)
 
