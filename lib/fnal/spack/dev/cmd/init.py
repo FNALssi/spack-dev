@@ -23,9 +23,10 @@ if sys.version_info[0] > 3 or \
 else:
     from distutils.spawn import find_executable as which
 
-import spack.cmd
 import spack.build_environment
+import spack.concretize
 import spack.paths
+import spack.spec
 from spack.util.environment import \
     dump_environment, pickle_environment, env_var_to_source_line
 import spack.util.executable
@@ -102,7 +103,9 @@ def extract_specs(spec_source):
         # File containing spack install specification.
         with open(spec_source, 'r') as dag_file:
             spec_args.extend(dag_file.read().rstrip().split())
-    return spack.cmd.parse_specs(spec_args, concretize=True)
+    # From PR 11158.
+    specs = spack.spec.parse(spec_args)
+    return spack.concretize.concretize_specs_together(*specs)
 
 
 def get_additional(requested, specs):
@@ -116,6 +119,7 @@ def get_additional(requested, specs):
             for spec in specs:
                 append_unique([dep for dep in spec.flat_dependencies() if
                                dep not in all_done and
+                               package in spec and
                                dep in spec[package].dependents_dict()],
                               found)
         additional += found
@@ -458,6 +462,8 @@ def write_package_info(requested, additional, specs):
     install_names = []
     for package in dev_packages:
         for spec in specs:
+            if package not in spec:
+                continue
             dep_specs_new\
                 = [dep for dep in spec[package].dependencies() if
                    dep.name not in dev_packages + install_names]
