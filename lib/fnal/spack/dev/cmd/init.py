@@ -532,6 +532,10 @@ def setup_parser(subparser):
     subparser.add_argument('-p', '--print-spec-tree', action='store_true',
                            dest='print_spec_tree',
                            help='Print the full calculated spec tree(s)---cf spack spec -It')
+    subparser.add_argument('-P', '--print-spec-tree-exit', action='store_const',
+                           dest='print_spec_tree',
+                           const='exit',
+                           help='Print the full calculated spec tree(s)---cf spack spec -It---and then exit')
     gengroup\
         = subparser.add_argument_group\
         ('generator control',
@@ -629,7 +633,6 @@ def init(parser, args):
         tty.msg('additional inter-dependent packages: ' +
                 ' '.join(additional))
     dev_packages = requested + additional
-    dep_specs = write_package_info(requested, additional, specs)
     if args.print_spec_tree:
         tty.msg('Full spec tree: \n{0}'.\
                 format('\n'.join([spec.tree(cover='nodes',
@@ -638,7 +641,10 @@ def init(parser, args):
                                             show_types=True,
                                             status_fn=spack.spec.Spec.install_status)
                                   for spec in specs])))
+        if args.print_spec_tree == 'exit':
+            sys.exit(1)
 
+    dep_specs = write_package_info(requested, additional, specs)
     package_specs = {}
     for package in dev_packages:
         spec = dev.cmd.get_package_spec(package, specs)
