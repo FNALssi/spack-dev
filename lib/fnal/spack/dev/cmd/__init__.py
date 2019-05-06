@@ -2,6 +2,7 @@ import os
 import shutil
 
 from llnl.util import tty
+from llnl.util.filesystem import mkdirp
 
 import fnal.spack.dev as dev
 
@@ -46,8 +47,11 @@ def stage_package(package, spec):
     spec.package.path\
         = os.path.join(os.environ['SPACKDEV_BASE'], dev.spackdev_aux_tmp_subdir)
     spec.package.do_stage()
-    shutil.move(os.path.join(spec.package.path, package),
-                os.path.join(topdir,'')) # Need trailing /
+    package_dest = os.path.join(topdir, package)
+    mkdirp(package_dest)
+    for file_or_dir in os.listdir(spec.package.path):
+        shutil.move(os.path.join(spec.package.path, file_or_dir),
+                    os.path.join(package_dest, file_or_dir))
 
 
 def stage_packages(packages, package_specs):
