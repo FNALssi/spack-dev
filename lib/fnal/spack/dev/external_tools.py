@@ -4,9 +4,16 @@ import commands
 import os
 import re
 import sys
-import distutils.spawn
 import tempfile
+
 from external_package import External_package
+
+if sys.version_info[0] > 3 or \
+   (sys.version_info[0] == 3 and sys.version_info[1] > 2):
+    # Available from Python 3.3 onwards.
+    from shutil import which
+else:
+    from distutils.spawn import find_executable as which
 
 
 def status_write(output):
@@ -16,7 +23,7 @@ def status_write(output):
 
 def find_executable_version(executable, version_arg='--version',
                             version_regexp='[0-9]+\.[0-9\.]+[0-9a-z-]*'):
-    pathname = which_executable_in_path(executable)
+    pathname = which(executable)
     if pathname:
         prefix = os.path.dirname(os.path.dirname(pathname))
         version = extract_executable_version(pathname, version_arg,
@@ -25,10 +32,6 @@ def find_executable_version(executable, version_arg='--version',
         prefix = None
         version = None
     return External_package(executable, version, prefix)
-
-
-def which_executable_in_path(executable):
-    return distutils.spawn.find_executable(executable)
 
 
 def extract_executable_version(pathname, arg='--version', 

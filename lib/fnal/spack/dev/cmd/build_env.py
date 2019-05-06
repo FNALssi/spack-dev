@@ -6,9 +6,12 @@ import copy
 import os
 import re
 import tempfile
-from spackdev import environment_from_pickle, sanitized_environment,\
-    bootstrap_environment
-from spackdev.spack_import import tty
+
+from llnl.util import tty
+
+import fnal.spack.dev as dev
+from fnal.spack.dev.environment import bootstrap_environment, \
+    sanitized_environment, environment_from_pickle
 
 description = "run a command in the build environment of a spackdev package, or start a shell in same."
 
@@ -16,7 +19,10 @@ description = "run a command in the build environment of a spackdev package, or 
 def load_environment(package):
     package_env_file_name\
         = os.path.join(os.environ['SPACKDEV_BASE'],
-                       'spackdev-aux', package, 'env', 'env.pickle')
+                       dev.spackdev_aux_packages_subdir,
+                       package,
+                       'env',
+                       'env.pickle')
     if not os.path.exists(package_env_file_name):
         tty.die('unable to find environment for {0}: not a package being developed?'.format(package))
     environment = copy.copy(os.environ)
@@ -41,7 +47,7 @@ rm -f "{tfile_name}"
 def setup_parser(subparser):
     subparser.add_argument('package',
                            help='package for which to initialize environment.')
-    subparser.add_argument('cmd', nargs=argparse.REMAINDER,
+    subparser.add_argument('cmd', nargs='*',
                            help='Command and arguments to execute (default is to start a shell)')
     subparser.add_argument('--cd', action='store_true', default=False,
                            help='Execute the command in the build directory for the specified package')
@@ -49,7 +55,7 @@ def setup_parser(subparser):
                            help='Show the package whose environment is current at the command prompt of interactive shells (BASH only).')
 
 
-def env(parser, args):
+def build_env(parser, args):
     bootstrap_environment()
     if not args.cmd:
         shell = os.environ['SPACK_SHELL']
