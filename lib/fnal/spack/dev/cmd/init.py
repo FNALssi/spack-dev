@@ -118,11 +118,13 @@ def get_additional(requested, specs):
         found = []
         for package in to_consider:
             for spec in specs:
-                append_unique([dep for dep in spec.flat_dependencies() if
-                               dep not in all_done and
-                               package in spec and
-                               dep in spec[package].dependents_dict()],
-                              found)
+                for terminal_package in all_done:
+                    if terminal_package in spec:
+                        append_unique([dep for dep in spec[terminal_package].flat_dependencies() if
+                                       dep not in all_done and
+                                       package in spec and
+                                       dep in spec[package].dependents_dict()],
+                                      found)
         additional += found
     return additional
 
