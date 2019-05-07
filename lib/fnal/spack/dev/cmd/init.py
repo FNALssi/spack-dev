@@ -152,7 +152,8 @@ set_property(DIRECTORY PROPERTY EP_STEP_TARGETS
 
 
 gen_arg = re.compile(r'-G(.*)')
-def add_package_to_cmakelists(cmakelists, package, package_dependencies,
+def add_package_to_cmakelists(cmakelists, package, spec,
+                              package_dependencies,
                               cmake_args, build_system):
 
     cmd_wrapper\
@@ -260,7 +261,7 @@ def write_cmakelists(packages, package_specs, build_system, path_fixer):
                 package_cmake_args[package]\
                     = [path_fixer.fix(val) for val in \
                        package_cmake_args[package]]
-                add_package_to_cmakelists(cmakelists, package,
+                add_package_to_cmakelists(cmakelists, package, spec,
                                           package_dependencies,
                                           package_cmake_args[package],
                                           build_system)

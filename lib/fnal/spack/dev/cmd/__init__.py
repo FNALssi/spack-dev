@@ -40,18 +40,28 @@ def stage_package(package, spec):
     topdir = dev.environment.srcs_topdir()
     if not os.path.exists(topdir):
         os.mkdir(topdir)
-    if os.path.exists(os.path.join(topdir, package)):
-        tty.msg('stage: directory "{0}" exists: skipping'.format(package))
-        return
-    tty.msg('staging '  + package)
-    spec.package.path\
-        = os.path.join(os.environ['SPACKDEV_BASE'], dev.spackdev_aux_tmp_subdir)
-    spec.package.do_stage()
     package_dest = os.path.join(topdir, package)
-    mkdirp(package_dest)
-    for file_or_dir in os.listdir(spec.package.path):
+    if os.path.exists(package_dest):
+        tty.msg('Package {0} is already staged for development: skipping'.
+                format(package))
+        return
+    tty.msg('Staging {0} for development'.format(package))
+    spec.package.path\
+        = os.path.join(os.environ['SPACKDEV_BASE'],
+                       dev.spackdev_aux_tmp_subdir)
+    spec.package.do_stage()
+    files_or_dirs\
+        = ['spack-expanded-archive'] if \
+        os.path.exists(os.path.join(spec.package.path,
+                                    'spack-expanded-archive')) else \
+        os.listdir(spec.package.path)
+    if len(files_or_dirs) > 1:  # Automatic consolidation.
+        mkdirp(package_dest)
+    for file_or_dir in files_or_dirs:
+        tty.debug('Moving {0} to {1}'.format(os.path.join(spec.package.path, file_or_dir),
+                                           package_dest))
         shutil.move(os.path.join(spec.package.path, file_or_dir),
-                    os.path.join(package_dest, file_or_dir))
+                    package_dest)
 
 
 def stage_packages(packages, package_specs):
