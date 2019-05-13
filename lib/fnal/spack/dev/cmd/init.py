@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 
 import argparse
@@ -11,6 +12,7 @@ import sys
 import spack.store  # For spack.store.root to replace SPACK_INSTALL
 
 import fnal.spack.dev as dev
+from fnal.spack.dev.cmd import DevPackageInfo
 from fnal.spack.dev.environment import sanitized_environment, srcs_topdir
 
 from llnl.util import tty
@@ -459,7 +461,10 @@ def create_environment(packages, package_specs):
     return path_fixer
 
 
-def write_package_info(requested, additional, specs):
+def write_package_info(requested, additional,
+                       requested_dev_package_info,
+                       default_version_info,
+                       specs):
     packages_dir = os.path.join(spackdev_base, dev.spackdev_aux_packages_subdir)
     packages_filename = os.path.join(packages_dir, 'packages.sd')
     if not os.path.isdir(packages_dir):
@@ -468,7 +473,8 @@ def write_package_info(requested, additional, specs):
     dev_packages = requested + additional
     dep_specs = []
     install_names = []
-    for package in dev_packages:
+
+    for counter, package in enumerate(dev_packages):
         for spec in specs:
             if package not in spec:
                 continue
@@ -478,10 +484,12 @@ def write_package_info(requested, additional, specs):
             dep_specs += dep_specs_new
             install_names.extend([dep.name for dep in dep_specs_new])
 
-    # Write package names
+    # Write package names.
     with open(packages_filename, 'w') as f:
-        f.write(' '.join(requested) + '\n')
-        f.write(' '.join(additional) + '\n')
+        f.write(' '.join([dp.package_arg for
+                          dp in requested_dev_package_info]) + '\n')
+        f.write(' '.join([DevPackageInfo(a, default_version_info).package_arg
+                          for a in additional]) + '\n')
         f.write(' '.join([dep.name for dep in dep_specs]) + '\n')
 
     # Write spec YAML.
@@ -533,11 +541,17 @@ when you have addressed any problems.'''.
 
 def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
-                           help="specs of packages to add to SpackDev area")
+                           help='specs of packages (<package>@<tag>, <package>^<branch>) to add to SpackDev area')
     subparser.add_argument('--dag-file',
                            help='packages and dependencies should be inferred '
                            'from the list specified in this text file (in '
                            '"spack install" format)')
+    defgroup = subparser.add_mutually_exclusive_group()
+    defgroup.add_argument('--default-branch', dest='default_branch', default='develop',
+                          help='default branch for package checkout.')
+    defgroup.add_argument('--default-tag', dest='default_tag',
+                          help='default tag for package checkout.')
+
     subparser.add_argument('-d', '--no-dependencies', action='store_true',
                            dest='no_dependencies',
                            help='do not have spack install dependent packages')
@@ -545,13 +559,6 @@ def setup_parser(subparser):
                            help='Continue if base directory is not empty')
     subparser.add_argument('-b', '--base-dir', dest='base_dir',
                            help='Specify base directory to use instead of current working directory')
-    subparser.add_argument('-p', '--print-spec-tree', action='store_true',
-                           dest='print_spec_tree',
-                           help='Print the full calculated spec tree(s)---cf spack spec -It')
-    subparser.add_argument('-P', '--print-spec-tree-exit', action='store_const',
-                           dest='print_spec_tree',
-                           const='exit',
-                           help='Print the full calculated spec tree(s)---cf spack spec -It---and then exit')
     gengroup\
         = subparser.add_argument_group\
         ('generator control',
@@ -576,11 +583,41 @@ def setup_parser(subparser):
                           'automatically use the selected generator '
                           'regardless of this setting.')
 
+    subparser.add_argument('-p', '--print-spec-tree', action='store_true',
+                           dest='print_spec_tree',
+                           help='Print the full calculated spec tree(s)---cf spack spec -It')
+    subparser.add_argument('-P', '--print-spec-tree-exit', action='store_const',
+                           dest='print_spec_tree',
+                           const='exit',
+                           help='Print the full calculated spec tree(s)---cf spack spec -It---and then exit')
     subparser.add_argument('-s', '--no-stage', action='store_true',
                            dest='no_stage',
                            help='do not stage packages')
     subparser.add_argument('-v', '--verbose', action='store_true',
                            help='provide more helpful output')
+
+    subparser.epilog\
+        = '''Package specification for devlopment:
+  The exact source code used for a package checked out for development is chosen as follows:
+
+  A) If the package is specified as <package>@<tag> or <package>^<branch>, then:
+     1. If the tag or branch corresponds to a version known to the package that utilizes a version-control system for checkout, it will be used. 
+     2. Otherwise, the 'develop' version will be used as a template to check out the desired branch or tag of the code.
+     3. If there is no 'develop' version, the specified version will be fetched regardless of the fetch method specified in the recipe.
+  B) If the package does not have a specified version or it is an "additional" package identified as necessary for build consistency, then use the value from --default-branch, --default-tag, or 'develop' and see (A) above.
+
+  Notes:
+    * At any time, the user may check out a different branch or tag in srcs/<package>, or may even scrub and re-obtain the source independently. This may be desirable if, for instance, a static (not version-controlled) copy of the source was staged.
+    * The dependency tree is determined by the DAG *as specified*—it is not altered in any way by a specific or default version override on the command line.
+       '''
+
+
+def default_version_info_from_args(args):
+    return\
+        {'key': 'tag',
+         'tag_or_branch': args.default_tag} if args.default_tag else \
+        {'key': 'branch',
+         'tag_or_branch': args.default_branch}
 
 
 def init(parser, args):
@@ -617,7 +654,14 @@ def init(parser, args):
     # Save for posterity
     os.environ['SPACKDEV_BASE'] = spackdev_base
 
-    requested = args.packages
+    # Extract and build dev package and spec info
+    default_version_info = default_version_info_from_args(args)
+
+    requested_dev_package_info\
+        = [DevPackageInfo(package_arg, default_info=default_version_info) for
+           package_arg in args.packages]
+    requested = [dp.name for dp in requested_dev_package_info]
+
     dag_filename = args.dag_file
     build_system = Build_system(args.generator, args.override_generator)
     os.environ['SPACKDEV_GENERATOR'] = build_system.cmake_generator
@@ -654,7 +698,14 @@ def init(parser, args):
         tty.msg('additional inter-dependent packages: ' +
                 ' '.join(additional))
     dev_packages = requested + additional
+
     if args.print_spec_tree:
+########################################################################
+# FIXME: Finish this.
+#        specs_to_print = []
+#        for spec in specs:
+#            append_unique([spec[p] for p in dev_packages if p in spec
+########################################################################
         tty.msg('Full spec tree: \n{0}'.\
                 format('\n'.join([spec.tree(cover='nodes',
                                             format='{name}{@version}{%compiler}{compiler_flags}{variants}{arch=architecture}',
@@ -665,7 +716,11 @@ def init(parser, args):
         if args.print_spec_tree == 'exit':
             sys.exit(1)
 
-    dep_specs = write_package_info(requested, additional, specs)
+    dep_specs\
+        = write_package_info(requested, additional,
+                             requested_dev_package_info,
+                             default_version_info,
+                             specs)
     package_specs = {}
     for package in dev_packages:
         spec = dev.cmd.get_package_spec(package, specs)
@@ -677,7 +732,9 @@ def init(parser, args):
 
     if not args.no_stage:
         tty.msg('stage sources for {0}'.format(dev_packages))
-        dev.cmd.stage_packages(dev_packages, package_specs)
+        dev.cmd.stage_packages(requested_dev_package_info +
+                               [default_version_info] * len(additional),
+                               package_specs)
 
     if not args.no_dependencies:
         tty.msg('install dependencies')
