@@ -49,8 +49,8 @@ class Build_system:
     def __init__(self, generator, override=False):
         primary_generator = generator_extractor.match(generator)
         if not primary_generator:
-            tty.die('''Build_system: invalid generator {0}--primary generator must be
-           either "Unix Makefiles" or "Ninja"'''.format(generator))
+            tty.die('Build_system: invalid generator {0}--primary generator '
+                    'must be either "Unix Makefiles" or "Ninja"'.format(generator))
         self.cmake_generator = generator
         self.label = 'ninja' if primary_generator.group(1) == 'Ninja' else 'make'
         self.build_command = self.label # default
@@ -60,7 +60,8 @@ class Build_system:
             elif which('ninja-build'):
                 self.build_command = 'ninja-build'
             else:
-                tty.msg('warning: ninja build selected, but neither "ninja" nor "ninja-build" are available')
+                tty.msg('warning: ninja build selected, but neither "ninja" '
+                        'nor "ninja-build" are available')
         self.override = override
 
 
@@ -534,14 +535,16 @@ def setup_parser(subparser):
     subparser.add_argument('packages', nargs=argparse.REMAINDER,
                            help="specs of packages to add to SpackDev area")
     subparser.add_argument('--dag-file',
-                           help='packages and dependencies should be inferred from the list specified in this text file (in "spack install" format)')
+                           help='packages and dependencies should be inferred '
+                           'from the list specified in this text file (in '
+                           '"spack install" format)')
     subparser.add_argument('-d', '--no-dependencies', action='store_true',
                            dest='no_dependencies',
-                           help="do not have spack install dependent packages")
+                           help='do not have spack install dependent packages')
     subparser.add_argument('-f', '--force', action='store_true',
-                           help="Continue if base directory is not empty")
+                           help='Continue if base directory is not empty')
     subparser.add_argument('-b', '--base-dir', dest='base_dir',
-                           help="Specify base directory to use instead of current working directory")
+                           help='Specify base directory to use instead of current working directory')
     subparser.add_argument('-p', '--print-spec-tree', action='store_true',
                            dest='print_spec_tree',
                            help='Print the full calculated spec tree(s)---cf spack spec -It')
@@ -552,30 +555,32 @@ def setup_parser(subparser):
     gengroup\
         = subparser.add_argument_group\
         ('generator control',
-         '''Control the generator used by the top-level CMake invocation, and
-optionally override generator choices for CMake packages under development.''')
+         'Control the generator used by the top-level CMake invocation, and '
+         'optionally override generator choices for CMake packages under '
+         'development.')
     mgroup = gengroup.add_mutually_exclusive_group()
     mgroup.add_argument('-m', '--make', action='store_const',
                         dest='generator', const='Unix Makefiles',
-                        help="use make instead of ninja")
+                        help='use make instead of ninja')
     mgroup.add_argument('-n', '--ninja', action='store_const',
                         dest='generator', const='Ninja',
-                        help="use ninja instead of make")
+                        help='use ninja instead of make')
     mgroup.add_argument('-G', '--generator', dest='generator',
-                        help="Specify the generator to use explicitly")
+                        help='Specify the generator to use explicitly')
     mgroup.set_defaults(generator='Unix Makefiles')
     gengroup.add_argument('--override-generator', action='store_true',
                           default=False,
-                          help="""Override CMake generator choice for packages under development.
-
-Packages supporting the SPACKDEV_GENERATOR environment variable will
-automatically use the selected generator regardless of this setting.""")
+                          help='Override CMake generator choice for packages '
+                          'under development. Packages supporting the '
+                          'SPACKDEV_GENERATOR environment variable will '
+                          'automatically use the selected generator '
+                          'regardless of this setting.')
 
     subparser.add_argument('-s', '--no-stage', action='store_true',
                            dest='no_stage',
-                           help="do not stage packages")
+                           help='do not stage packages')
     subparser.add_argument('-v', '--verbose', action='store_true',
-                           help="provide more helpful output")
+                           help='provide more helpful output')
 
 
 def init(parser, args):
@@ -667,7 +672,7 @@ def init(parser, args):
         if spec:
             package_specs[package] = spec[package]
         else:
-            tty.die("Unable to find spec for specified package {0}".\
+            tty.die('Unable to find spec for specified package {0}'.\
                     format(package))
 
     if not args.no_stage:
