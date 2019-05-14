@@ -463,7 +463,7 @@ def create_environment(packages, package_specs):
 
 def write_package_info(requested, additional,
                        requested_dev_package_info,
-                       default_version_info,
+                       additional_dev_package_info,
                        specs):
     packages_dir = os.path.join(spackdev_base, dev.spackdev_aux_packages_subdir)
     packages_filename = os.path.join(packages_dir, 'packages.sd')
@@ -488,8 +488,8 @@ def write_package_info(requested, additional,
     with open(packages_filename, 'w') as f:
         f.write(' '.join([dp.package_arg for
                           dp in requested_dev_package_info]) + '\n')
-        f.write(' '.join([DevPackageInfo(a, default_version_info).package_arg
-                          for a in additional]) + '\n')
+        f.write(' '.join([dp.package_arg for
+                          dp in additional_dev_package_info]) + '\n')
         f.write(' '.join([dep.name for dep in dep_specs]) + '\n')
 
     # Write spec YAML.
@@ -694,6 +694,9 @@ def init(parser, args):
                    if dag_filename else ''))
     specs = extract_specs(dag_filename if dag_filename else requested)
     additional = get_additional(requested, specs)
+    additional_dev_package_info\
+        = [DevPackageInfo(a, default_info=default_version_info)
+           for a in additional]
     if additional:
         tty.msg('additional inter-dependent packages: ' +
                 ' '.join(additional))
@@ -719,7 +722,7 @@ def init(parser, args):
     dep_specs\
         = write_package_info(requested, additional,
                              requested_dev_package_info,
-                             default_version_info,
+                             additional_dev_package_info,
                              specs)
     package_specs = {}
     for package in dev_packages:
@@ -733,7 +736,7 @@ def init(parser, args):
     if not args.no_stage:
         tty.msg('stage sources for {0}'.format(dev_packages))
         dev.cmd.stage_packages(requested_dev_package_info +
-                               [default_version_info] * len(additional),
+                               additional_dev_package_info,
                                package_specs)
 
     if not args.no_dependencies:
