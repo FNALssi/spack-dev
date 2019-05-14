@@ -132,18 +132,17 @@ source we want to develop for this package.
         # Nothing to do.
         return
 
-    fetcher_OK = False
+    fetcher_Version = None
     spack_package = spec.package
 
     # We want the tag or branch specified in dp.
     package_Version = Version(dp.tag_or_branch)
     develop_Version = Version('develop')
-    if package_Version in spack_package.versions:
-        # Need to check whether it's a VC fetcher.
-        if _version_is_vc(spack_package, package_Version):
-            spack_package.fetcher = fs.for_package_version(spack_package, package_Version)
-            fetcher_OK = True
-    if not fetcher_OK and \
+    if package_Version in spack_package.versions and \
+       _version_is_vc(spack_package, package_Version):
+        # Specified version is version-controlled.
+        fetcher_Version = package_Version
+    elif not fetcher_Version and \
        develop_Version in spack_package.versions and \
        _version_is_vc(spack_package, develop_Version):
         # Repurpose develop to obtain the tag/branch we need.
@@ -173,10 +172,15 @@ source we want to develop for this package.
             raise SpackError('INTERNAL ERROR: spack dev cannot handle '
                              'apparently-supported VC method\n'
                              'version_dict = {0}'.format(version_dict))
-        spack_package.fetcher = fs.for_package_version(spack_package, develop_Version)
-        fetcher_OK = True
+        fetcher_Version = develop_Version
 
-    if fetcher_OK:
+    if fetcher_Version:
+        version_dict = spack_package.versions[fetcher_Version]
+        version_dict['no_cache'] = True  # Disable caching.
+        if 'git' in version_dict:
+            # Disable efficiency options that aren't wanted here.
+            version_dict.update({'full_depth': True, 'all_branches': True})
+        spack_package.fetcher = fs.for_package_version(spack_package, fetcher_Version)
         spack_package.stage = Stage(spack_package.fetcher, path=spack_package.path)
     else:
         tty.warn('Spack dev unable to obtain VC source for package {0} {1}'
