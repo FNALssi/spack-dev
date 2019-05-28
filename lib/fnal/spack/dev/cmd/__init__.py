@@ -201,9 +201,6 @@ def stage_package(dp, spec):
                 format(package))
         return
     tty.msg('Staging {0} for development'.format(package))
-    spec.package.path\
-        = os.path.join(os.environ['SPACKDEV_BASE'],
-                       dev.spackdev_aux_tmp_subdir)
     _tweak_dev_package_fetcher(dp, spec)
     spec.package.do_stage()
     if os.path.exists(os.path.join(spec.package.path,
@@ -212,6 +209,7 @@ def stage_package(dp, spec):
                                    'spack-expanded-archive')
     else:
         package_path = spec.package.path
+
     files_or_dirs = os.listdir(package_path)
     if len(files_or_dirs) > 1:  # Automatic consolidation.
         mkdirp(package_dest)

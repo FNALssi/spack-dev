@@ -288,7 +288,7 @@ def write_cmakelists(packages, package_specs, build_system, path_fixer):
 
 
 def spack_stage_top():
-    return spack.paths.stage_path
+    return os.path.join(spackdev_base, dev.spackdev_aux_tmp_subdir)
 
 
 def par_val_to_string(par, val):
@@ -636,12 +636,9 @@ def default_version_info_from_args(args):
          'tag_or_branch': args.default_branch}
 
 
-def init(parser, args):
+def init_spackdev_base(args):
     global spackdev_base
-
-    # Verbosity
-    tty.set_verbose(args.verbose)
-
+    # Sanity checks.
     if 'SPACKDEV_BASE' in os.environ:
         if args.force:
             tty.warn('spack dev init: (force) removing existing SPACKDEV_* from current environment.')
@@ -658,7 +655,6 @@ def init(parser, args):
         else:
             tty.die('spack dev init: {0} is not a directory or its parent does not exist.'
                     .format(args.base_dir))
-
     try:
         if (not os.path.exists(spackdev_base)):
             os.mkdir(spackdev_base)
@@ -666,22 +662,6 @@ def init(parser, args):
     except OSError:
         tty.die('spack dev init: unable to make or change directory to {0}'
                 .format(spackdev_base))
-
-    # Save for posterity
-    os.environ['SPACKDEV_BASE'] = spackdev_base
-
-    # Extract and build dev package and spec info
-    default_version_info = default_version_info_from_args(args)
-
-    requested_dev_package_info\
-        = [DevPackageInfo(package_arg, default_info=default_version_info) for
-           package_arg in args.packages]
-    requested = [dp.name for dp in requested_dev_package_info]
-
-    dag_filename = args.dag_file
-    build_system = Build_system(args.generator, args.override_generator)
-    os.environ['SPACKDEV_GENERATOR'] = build_system.cmake_generator
-
     if os.listdir(spackdev_base):
         if args.force:
             tty.warn('spack dev init: (force) using non-empty directory {0}'
@@ -701,9 +681,64 @@ def init(parser, args):
             tty.die('spack dev init: refusing to use non-empty directory {0}'
                     .format(spackdev_base))
 
+    # Save for posterity.
+    os.environ['SPACKDEV_BASE'] = spackdev_base
+
+    # Make necessary subdirectories.
     os.mkdir('spackdev-aux')
     filesystem.mkdirp('srcs')
 
+
+def print_spec_tree(dev_packages, specs):
+    # Print the minimum number of spec trees starting with a package
+    # for development such that all packages for development
+    # (including additional ones) are shown in at least one tree.
+    spec_names_to_print = set()
+    specs_to_print_dict = {}
+    all_to_print = set()
+    for spec in specs:
+        for p in dev_packages:
+            if p in spec and p not in all_to_print:
+                flat_dependencies = spec[p].flat_dependencies().keys()
+                # Print the largest tree(s) only, avoiding
+                # duplication of development packages.
+                spec_names_to_print.difference_update(flat_dependencies)
+                all_to_print.update(flat_dependencies)
+                spec_names_to_print.add(p)
+                specs_to_print_dict[p] = spec[p]
+    tty.msg('Development package spec trees: \n{0}'.\
+            format('\n'.join([spec.tree(cover='nodes',
+                                        format='{name}{@version}{%compiler}{compiler_flags}{variants}{arch=architecture}',
+                                        hashlen=7,
+                                        show_types=True,
+                                        status_fn=spack.spec.Spec.install_status)
+                              for spec in [specs_to_print_dict[p] for p in spec_names_to_print]])))
+
+
+# Implementation of the subcommand.
+def init(parser, args):
+    # Verbosity
+    tty.set_verbose(args.verbose)
+
+    # Initialize the spack dev area.
+    init_spackdev_base(args)
+
+    # Extract and build dev package and spec info from args.
+    default_version_info = default_version_info_from_args(args)
+
+    requested_dev_package_info\
+        = [DevPackageInfo(package_arg, default_info=default_version_info) for
+           package_arg in args.packages]
+    requested = [dp.name for dp in requested_dev_package_info]
+
+    # Specify the build system in the environment (may be used by
+    # recipes during spec concretization).
+    build_system = Build_system(args.generator, args.override_generator)
+    os.environ['SPACKDEV_GENERATOR'] = build_system.cmake_generator
+
+    # Construct the concretized spec tree and identify additional
+    # packages for checkout.
+    dag_filename = args.dag_file
     tty.msg('requested packages: {0}{1}'.\
             format(', '.join(requested),
                    ' from install tree as specified in {0}'.format(dag_filename)
@@ -718,57 +753,61 @@ def init(parser, args):
                 ' '.join(additional))
     dev_packages = requested + additional
 
-    if args.print_spec_tree:
-########################################################################
-# FIXME: Finish this.
-#        specs_to_print = []
-#        for spec in specs:
-#            append_unique([spec[p] for p in dev_packages if p in spec
-########################################################################
-        tty.msg('Full spec tree: \n{0}'.\
-                format('\n'.join([spec.tree(cover='nodes',
-                                            format='{name}{@version}{%compiler}{compiler_flags}{variants}{arch=architecture}',
-                                            hashlen=7,
-                                            show_types=True,
-                                            status_fn=spack.spec.Spec.install_status)
-                                  for spec in specs])))
-        if args.print_spec_tree == 'exit':
-            sys.exit(1)
-
-    dep_specs\
-        = write_package_info(requested, additional,
-                             requested_dev_package_info,
-                             additional_dev_package_info,
-                             specs)
+    # Identify specs and set staging path for development packages.
     package_specs = {}
     for package in dev_packages:
         spec = dev.cmd.get_package_spec(package, specs)
         if spec:
             package_specs[package] = spec[package]
+            # Set the package's path to be passed to the stage object
+            # when it is created.
+            spec.package.path = spack_stage_top()
         else:
             tty.die('Unable to find spec for specified package {0}'.\
                     format(package))
 
+    # Print development package spec tree(s) if desired.
+    if args.print_spec_tree:
+        print_spec_tree(dev_packages, specs)
+        if args.print_spec_tree == 'exit':
+            sys.exit(1)
+
+
+
+    # Stage development packages if selected.
     if not args.no_stage:
         tty.msg('stage sources for {0}'.format(dev_packages))
         dev.cmd.stage_packages(requested_dev_package_info +
                                additional_dev_package_info,
                                package_specs)
 
+    # Identify non-development dependencies and write package info to
+    # file.
+    dep_specs\
+        = write_package_info(requested, additional,
+                             requested_dev_package_info,
+                             additional_dev_package_info,
+                             specs)
+
+    # Install dependencies if selected.
     if not args.no_dependencies:
         tty.msg('install dependencies')
         dev.cmd.install_dependencies(dev_packages=dev_packages,
                                      dep_specs=dep_specs)
 
-    tty.msg('create wrapper scripts')
+    # Create the environment files.
+    tty.msg('create environment files.')
     path_fixer = create_environment(dev_packages, package_specs)
 
+    # Generate the top level CMakeLists.txt.
     tty.msg('generate top level CMakeLists.txt')
     write_cmakelists(dev_packages, package_specs, build_system, path_fixer)
 
-    tty.msg('create and initialize build area')
+    # Initialize the build area.
+    tty.msg('initialize build area')
     create_build_area(build_system, args)
 
+    # Done.
     tty.msg('initialization of {0} complete;'.format(spackdev_base))
     tty.msg('source {0} to begin.'.
             format(os.path.join(spackdev_base, dev.spackdev_aux_subdir,
