@@ -86,17 +86,22 @@ class PathFixer:
         sorted_args = sorted(args, key=lambda x: -len(x))
         # Replace all stage and install paths for packages we're
         # developing with their correct locations.
-        raw_matcher = r'(?:(?<=[=\s;:"\'])|^){{path}}/(?:[^;:\"]*?/)*?(?P<pkg>{0})-[^;:"\'/]*{{extra}}'.\
+        raw_matcher = r'(?:(?<=[=\s;:"\'])|^){{path}}/(?:[^;:\"]*?/)*?(?P<pkg>{0})-[^;:"\'/]*'.\
                      format('|'.join(sorted_args))
         self.install_path_finder\
-            = re.compile(raw_matcher.format(path=self.spack_install, extra=''))
-        self.stage_path_finder\
-            = re.compile(raw_matcher.format(path=self.spack_stage, extra='/spack-build'))
+            = re.compile(raw_matcher.format(path=self.spack_install))
 
-    def fix(self, path):
+    def fix(self, path, **kwargs):
         result = self.install_path_finder.sub(os.path.join(self.spackdev_install, r'\g<pkg>'), path)
-        result = self.stage_path_finder.sub(os.path.join(self.spackdev_stage, r'\g<pkg>'), result)
+        if 'build_directory' in kwargs:
+            result = re.sub(r'(?:(?<=[=\s;:"\'])|^){0}'.format(kwargs['build_directory']),
+                            os.path.join(spackdev_base, 'build', kwargs.get('package_name', '')),
+                            result)
         return result
+
+
+def build_directory_for(package_obj):
+    return getattr(package_obj, 'build_directory', package_obj.stage.path)
 
 
 def extract_specs(spec_source):
@@ -218,6 +223,7 @@ file(MAKE_DIRECTORY ${{SPACKDEV_TMPDIR}}/{package})
 file(MAKE_DIRECTORY {package})
 
 ExternalProject_Add({package}
+  TEST_BEFORE_INSTALL ON
   TMP_DIR "${{SPACKDEV_TMPDIR}}/{package}"
   STAMP_DIR "${{SPACKDEV_TMPDIR}}/{package}/stamp"
   DOWNLOAD_DIR "${{SPACKDEV_TMPDIR}}/{package}"
@@ -225,6 +231,7 @@ ExternalProject_Add({package}
   BINARY_DIR "{package}"
   INSTALL_DIR "${{SPACKDEV_PREFIX}}/{package}"
   CMAKE_COMMAND "{cmake_wrapper}"
+  TEST_COMMAND "{ctest_wrapper}"
   CMAKE_GENERATOR "{cmake_generator}"
   CMAKE_ARGS {cmake_args}
   BUILD_COMMAND {build_command}
@@ -234,6 +241,7 @@ ExternalProject_Add({package}
   )
 '''.format(package=package,
            cmake_wrapper=cmd_wrapper('cmake'),
+           ctest_wrapper=cmd_wrapper('ctest'),
            cmake_args=cmake_args_string,
            cmake_generator=cmake_generator,
            build_command='"{0}"'.format(cmd_wrapper(generator_cmd)) if
@@ -278,7 +286,7 @@ def write_cmakelists(packages, package_specs, build_system, path_fixer):
                 # Fix install / stage paths.
                 path_fixer.set_packages(package, *package_dependencies)
                 package_cmake_args[package]\
-                    = [path_fixer.fix(val) for val in \
+                            = [path_fixer.fix(val, build_directory=build_directory_for(spec.package), package_name=package) for val in \
                        package_cmake_args[package]]
                 add_package_to_cmakelists(cmakelists, package, spec,
                                           package_dependencies,
@@ -426,16 +434,12 @@ def create_compiler_wrappers(wrappers_dir, environment):
             copy_modified_script(value, dest, environment)
 
 
-def create_cmd_wrappers(wrappers_dir, environment):
+def create_cmd_wrappers(package, wrappers_dir, environment):
     for cmd in ['cmake', 'ctest', 'make', 'ninja']:
         filename = os.path.join(wrappers_dir, cmd) 
         with open(filename, 'w') as f:
             f.write('#!/bin/bash\n')
-            f.write('\n# begin spack variables\n')
-            for var, value in sorted(environment.iteritems()):
-                f.write('{0}\n'.format(env_var_to_source_line(var, value)))
-            f.write('# end spack variables\n\n')
-            f.write('exec {0} "$@"\n'.format(cmd))
+            f.write('exec spack dev build-env -- {package} {cmd} "$@"\n'.format(package=package, cmd=cmd))
         os.chmod(filename, 0755)
 
 
@@ -444,7 +448,7 @@ def create_wrappers(package, environment):
     if not os.path.exists(wrappers_dir):
         os.makedirs(wrappers_dir)
     create_compiler_wrappers(wrappers_dir, environment)
-    create_cmd_wrappers(wrappers_dir, environment)
+    create_cmd_wrappers(package, wrappers_dir, environment)
 
 
 def create_env_files(env_dir, environment):
@@ -464,12 +468,13 @@ def create_environment(packages, package_specs):
     path_fixer = None
     for package in packages:
         tty.msg('creating environment for {0}'.format(package))
-        environment = get_environment(package_specs[package])
+        package_spec = package_specs[package]
+        environment = get_environment(package_spec)
         if path_fixer is None:
             path_fixer = PathFixer(spack.store.root, spack_stage_top())
         # Fix paths in environment
         path_fixer.set_packages(*packages)
-        environment = dict((var, path_fixer.fix(val)) for var, val in
+        environment = dict((var, path_fixer.fix(val, build_directory=build_directory_for(package_spec.package), package_name=package)) for var, val in
                        environment.iteritems())
         create_wrappers(package, environment)
         create_env_files(os.path.join(dev.spackdev_aux_packages_subdir, package, 'env'), environment)
