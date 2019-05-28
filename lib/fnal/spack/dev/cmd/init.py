@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import argparse
+from collections import deque
 import copy
 import os
 import re
@@ -112,23 +113,38 @@ def extract_specs(spec_source):
     return spack.concretize.concretize_specs_together(*specs)
 
 
+def update_deps_with_deps_from(deps, new, specs, all_terminals):
+    for tp in new:
+        for spec in specs:
+            if tp in spec:
+                deps.update(spec[tp].flat_dependencies())
+                break
+    deps.difference_update(all_terminals)
+
+
+# TODO: This algorithm should be replaced by a more efficient marking
+# algorithm that only traverses each spec tree once.
 def get_additional(requested, specs):
-    additional = []
-    found = copy.copy(requested)
-    while len(found):
-        all_done = requested + additional
-        to_consider = copy.copy(found)
-        found = []
-        for package in to_consider:
-            for spec in specs:
-                for terminal_package in all_done:
-                    if terminal_package in spec:
-                        append_unique([dep for dep in spec[terminal_package].flat_dependencies() if
-                                       dep not in all_done and
-                                       package in spec and
-                                       dep in spec[package].dependents_dict()],
-                                      found)
-        additional += found
+    to_consider = deque(requested)
+    all_done = set(requested)
+    deps = set()
+    update_deps_with_deps_from(deps, requested, specs, [])
+    while len(to_consider):
+        tty.debug('get_additional: len(to_consider) = {0}'.format(len(to_consider)))
+        package = to_consider.popleft()
+        tty.debug('Considering package {0}:'.format(package))
+        for spec in specs:
+            found = set()
+            tty.debug('  -> in {0}'.format(spec.name))
+            found.update([dep for dep in deps if
+                          package in spec and
+                          dep in spec[package].dependents_dict()])
+            tty.debug('  -> identified additional packages {0}'.format(found))
+            update_deps_with_deps_from(deps, found, specs, all_done)
+            all_done.update(found)
+            to_consider.extend(found)
+    additional = list(all_done.difference(requested))
+    tty.debug('get_additional: full list of additional packages: {0}'.format(additional))
     return additional
 
 
