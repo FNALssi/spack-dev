@@ -20,15 +20,16 @@ def validate_args(packages, all_packages):
 
 def stage(parser, args):
     requested, additional, deps, install_specs = dev.cmd.read_package_info()
-    all_packages = requested + additional
+    all_package_names = [p.name for p in requested + additional]
 
-    validate_args(args.packages, all_packages)
+    validate_args(args.packages, all_packages_names)
     if len(args.packages) == 0:
-        packages = all_packages
+        packages = requested + additional
     else:
-        packages = args.packages
+        packages = [dp for dp in requested + additional if
+                    dp.name in args.packages]
 
     for package in packages:
-        tty.msg('staging ' + package)
+        tty.msg('staging ' + package.name)
         dev.cmd.stage_package(package,
-                              dev.cmd.get_package_spec(package, install_specs))
+                              dev.cmd.get_package_spec(package.name, install_specs))

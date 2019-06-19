@@ -33,6 +33,20 @@ _var_blacklist\
 _var_whitelist = re.compile(r'SPACK(?:DEV)?_')
 
 
+def load_environment(package):
+    package_env_file_name\
+        = os.path.join(os.environ['SPACKDEV_BASE'],
+                       dev.spackdev_aux_packages_subdir,
+                       package,
+                       'env',
+                       'env.pickle')
+    if not os.path.exists(package_env_file_name):
+        tty.die('unable to find environment for {0}: not a package being developed?'.format(package))
+    environment = os.environ.copy()
+    environment.update(environment_from_pickle(package_env_file_name))
+    return environment
+
+
 def sanitized_environment(environment, drop_unchanged=False):
     return dict((var, val) for (var, val) in environment.iteritems()
                 if _var_whitelist.match(var) or not

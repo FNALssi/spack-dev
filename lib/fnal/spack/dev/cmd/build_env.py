@@ -2,7 +2,6 @@
 from __future__ import print_function
 
 import argparse
-import copy
 import os
 import re
 import tempfile
@@ -11,24 +10,9 @@ from llnl.util import tty
 
 import fnal.spack.dev as dev
 from fnal.spack.dev.environment import bootstrap_environment, \
-    sanitized_environment, environment_from_pickle
+    load_environment, sanitized_environment, environment_from_pickle
 
 description = "run a command in the build environment of a spackdev package, or start a shell in same."
-
-
-def load_environment(package):
-    package_env_file_name\
-        = os.path.join(os.environ['SPACKDEV_BASE'],
-                       dev.spackdev_aux_packages_subdir,
-                       package,
-                       'env',
-                       'env.pickle')
-    if not os.path.exists(package_env_file_name):
-        tty.die('unable to find environment for {0}: not a package being developed?'.format(package))
-    environment = copy.copy(os.environ)
-    environment.update(sanitized_environment
-                       (environment_from_pickle(package_env_file_name)))
-    return environment
 
 
 prompt_splitter = re.compile(r'(.*?)([#\$]\s*)?$')
@@ -45,14 +29,14 @@ rm -f "{tfile_name}"
 
 
 def setup_parser(subparser):
-    subparser.add_argument('package',
-                           help='package for which to initialize environment.')
-    subparser.add_argument('cmd', nargs='*',
-                           help='Command and arguments to execute (default is to start a shell)')
     subparser.add_argument('--cd', action='store_true', default=False,
                            help='Execute the command in the build directory for the specified package')
     subparser.add_argument('--prompt', action='store_true', default=False,
                            help='Show the package whose environment is current at the command prompt of interactive shells (BASH only).')
+    subparser.add_argument('package',
+                           help='package for which to initialize environment.')
+    subparser.add_argument('cmd', nargs='*',
+                           help='Command and arguments to execute (default is to start a shell)')
 
 
 def build_env(parser, args):
