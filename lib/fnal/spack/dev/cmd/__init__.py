@@ -76,8 +76,7 @@ class DevPackageInfo:
 def read_package_info(want_specs=True):
     dev.environment.bootstrap_environment()
     packages_filename = os.path.join(os.environ['SPACKDEV_BASE'],
-                                     dev.spackdev_aux_packages_subdir,
-                                     'packages.sd')
+                                     dev.spackdev_aux_packages_sd_file)
     with open(packages_filename, 'r') as f:
         first_line = f.readline().rstrip()
         if first_line.find('[') > -1:
@@ -232,16 +231,16 @@ def get_package_spec(package, specs):
 
 def install_dependencies(**kwargs):
     if 'dep_specs' in kwargs:
-        dev_packages = kwargs['dev_packages']
+        dev_package_info = kwargs['dev_package_info']
         dep_specs = kwargs['dep_specs']
     else:
         # Concretization is necessary.
-        (requested, additional, deps, install_specs) = read_package_info()
-        dev_packages = requested + additional
+        (requested_info, additional_info, deps, install_specs) = read_package_info()
+        dev_package_info = requested_info + additional_info
         dep_specs = [ get_package_spec(dep, install_specs) for dep in deps ]
 
     tty.msg('requesting spack install of dependencies for: {0}'
-            .format(' '.join(dev_packages)))
+            .format(' '.join([dp.name for dp in dev_package_info])))
     for dep in dep_specs:
         tty.debug('installing dependency {0}'.format(dep.name))
         dep.package.do_install()
