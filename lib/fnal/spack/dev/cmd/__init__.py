@@ -176,9 +176,8 @@ source we want to develop for this package.
     if fetcher_Version:
         version_dict = spack_package.versions[fetcher_Version]
         version_dict['no_cache'] = True  # Disable caching.
-        if 'git' in version_dict:
-            # Disable efficiency options that aren't wanted here.
-            version_dict.update({'full_depth': True, 'all_branches': True})
+        if 'git' in version_dict: # Want full clone
+            version_dict['get_full_repo'] = True
         spack_package.fetcher = fs.for_package_version(spack_package, fetcher_Version)
         spack_package.stage = Stage(spack_package.fetcher, path=spack_package.path)
     else:

@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 
+import spack.hash_types as ht
 import spack.store  # For spack.store.root to replace SPACK_INSTALL
 
 import fnal.spack.dev as dev
@@ -574,7 +575,7 @@ def write_package_info(requested, additional,
     for dep in specs:
         with open(os.path.join(spec_dir, '{0}.yaml'.format(dep.name)), 'w') \
              as f:
-            dep.to_yaml(f, True)
+            dep.to_yaml(stream=f, hash=ht.build_hash)
 
     return dep_specs
 

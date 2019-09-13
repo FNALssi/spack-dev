@@ -3,7 +3,8 @@ import os
 import sys
 
 import spack
-import spack.cmd
+from spack.cmd import find_commands, python_name
+from spack.command_loading import get_command_module_from
 import llnl.util.tty as tty
 
 SPACKDEV_FILE = os.path.realpath(os.path.expanduser(__file__))
@@ -21,8 +22,8 @@ _subcmd_functions = {}
 
 
 def add_subcommand(subparser, subcmd):
-    pname = spack.cmd.python_name(subcmd)
-    module = spack.cmd.get_module_from(pname, 'fnal.spack.dev')
+    pname = python_name(subcmd)
+    module = get_command_module_from(subcmd, 'fnal.spack.dev')
     sp = subparser.add_parser(subcmd, help=module.description)
     module.setup_parser(sp)
     global _subcmd_functions
@@ -32,7 +33,7 @@ def add_subcommand(subparser, subcmd):
 def setup_parser(subparser):
     sp = subparser.add_subparsers(metavar='SUBCOMMAND', dest='dev_command')
     global _subcmds
-    _subcmds = spack.cmd.find_commands(_subcmd_dir)
+    _subcmds = find_commands(_subcmd_dir)
     for subcmd in _subcmds:
         add_subcommand(sp, subcmd)
 
