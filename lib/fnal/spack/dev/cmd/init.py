@@ -103,7 +103,7 @@ class PathFixer:
     def fix(self, path, **kwargs):
         result = self.install_path_finder.sub(os.path.join(self.spackdev_install, r'\g<pkg>'), path)
         if 'build_directory' in kwargs:
-            result= re.sub(r'(?:(?<=[=\s;:"\'])|^){0}'.format(kwargs['build_directory']),
+            result = re.sub(r'(?:(?<=[=\s;:"\'])|^){0}'.format(kwargs['build_directory']),
                             os.path.join(spackdev_base, 'build', kwargs.get('package_name', '')),
                             result)
         return result
